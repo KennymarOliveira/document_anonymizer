@@ -1,0 +1,27 @@
+[tool.poetry]
+package-mode = false
+name = "document_anonymizer"
+version = "0.1.0"
+description = "API para anonimização de documentos jurídicos."
+authors = ["Autor <autor@exemplo.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.111.0"
+uvicorn = {extras = ["standard"], version = "^0.30.1"}
+spacy = "^3.7.4"
+sentence-transformers = "^3.0.1"
+pypdf = "^4.2.0"
+python-docx = "^1.1.2"
+pydantic = "^2.7.4"
+python-multipart = "^0.0.9"
+fpdf2 = "^2.8.8"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.2"
+flake8 = "^7.1.0"
+isort = "^5.13.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
