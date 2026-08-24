@@ -6,21 +6,34 @@ class SpacyNerEngine(BaseEngine):
     def __init__(self) -> None:
         self.nlp = spacy.load("pt_core_news_lg")
 
-    def anonymize(self, text: str) -> tuple[str, List[Dict[str, Any]]]:
+    def detect(self, text: str) -> List[Dict[str, Any]]:
         doc = self.nlp(text)
         entities = []
-        
-        # Ordena as entidades de trás para frente para evitar deslocamento de índices ao substituir
-        ents = sorted(doc.ents, key=lambda e: e.start_char, reverse=True)
+        for ent in doc.ents:
+            if ent.label_ in ["PER", "LOC", "ORG"]:
+                entities.append({
+                    "start": ent.start_char,
+                    "end": ent.end_char,
+                    "text": ent.text,
+                    "label": ent.label_,
+                    "engine": "Spacy"
+                })
+        return entities
+
+    def anonymize(self, text: str) -> tuple[str, List[Dict[str, Any]]]:
+        entities = self.detect(text)
+        entities_sorted = sorted(entities, key=lambda e: e["start"], reverse=True)
         anonymized_text = text
 
-        for ent in ents:
-            if ent.label_ in ["PER", "LOC", "ORG"]:
-                entities.append({"text": ent.text, "label": ent.label_, "engine": "Spacy"})
-                anonymized_text = (
-                    anonymized_text[:ent.start_char] + 
-                    f"[{ent.label_}_ANONIMIZADO]" + 
-                    anonymized_text[ent.end_char:]
-                )
+        for ent in entities_sorted:
+            anonymized_text = (
+                anonymized_text[:ent["start"]]
+                + f"[{ent['label']}_ANONIMIZADO]"
+                + anonymized_text[ent["end"]:]
+            )
 
-        return anonymized_text, list(reversed(entities))
+        clean_entities = [
+            {"text": e["text"], "label": e["label"], "engine": e["engine"]}
+            for e in reversed(entities_sorted)
+        ]
+        return anonymized_text, clean_entities

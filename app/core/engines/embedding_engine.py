@@ -1,7 +1,7 @@
+import re
 import torch
-from sentence_transformers import SentenceTransformer, util
 from typing import List, Dict, Any
-
+from sentence_transformers import SentenceTransformer, util
 from app.core.engines.base import BaseEngine
 
 class EmbeddingEngine(BaseEngine):
@@ -11,21 +11,50 @@ class EmbeddingEngine(BaseEngine):
         self.sensitive_terms = ["senha", "conta", "cartão", "confidencial"]
         self.sensitive_embeddings = self.model.encode(self.sensitive_terms, convert_to_tensor=True)
 
-    def anonymize(self, text: str) -> tuple[str, List[Dict[str, Any]]]:
-        words = text.split()
+    def detect(self, text: str) -> List[Dict[str, Any]]:
+        matches = list(re.finditer(r"\b\w+\b", text))
+        if not matches:
+            return []
+
+        # Extrai palavras únicas e calcula embeddings em batch
+        unique_words = list({m.group() for m in matches})
+        word_embeddings = self.model.encode(unique_words, convert_to_tensor=True)
+        cos_scores = util.cos_sim(word_embeddings, self.sensitive_embeddings)
+        max_scores, _ = torch.max(cos_scores, dim=1)
+
+        sensitive_word_set = {
+            unique_words[i]
+            for i, score in enumerate(max_scores)
+            if score.item() > self.threshold
+        }
+
         entities = []
-        anonymized_words = []
+        for m in matches:
+            word = m.group()
+            if word in sensitive_word_set:
+                entities.append({
+                    "start": m.start(),
+                    "end": m.end(),
+                    "text": word,
+                    "label": "SEMANTIC_SENSITIVE",
+                    "engine": "Embedding",
+                })
+        return entities
 
-        # A separação por palavras aqui é simplificada. Em produção, 
-        # pode ser necessário o uso de n-grams ou tokenização mais robusta.
-        for word in words:
-            word_emb = self.model.encode(word, convert_to_tensor=True)
-            cos_scores = util.cos_sim(word_emb, self.sensitive_embeddings)[0]
-            
-            if torch.max(cos_scores).item() > self.threshold:
-                entities.append({"text": word, "label": "SEMANTIC_SENSITIVE", "engine": "Embedding"})
-                anonymized_words.append("[SENSIVEL_ANONIMIZADO]")
-            else:
-                anonymized_words.append(word)
+    def anonymize(self, text: str) -> tuple[str, List[Dict[str, Any]]]:
+        entities = self.detect(text)
+        entities_sorted = sorted(entities, key=lambda e: e["start"], reverse=True)
 
-        return " ".join(anonymized_words), entities
+        anonymized_text = text
+        for ent in entities_sorted:
+            anonymized_text = (
+                anonymized_text[:ent["start"]]
+                + "[SENSIVEL_ANONIMIZADO]"
+                + anonymized_text[ent["end"]:]
+            )
+
+        clean_entities = [
+            {"text": e["text"], "label": e["label"], "engine": e["engine"]}
+            for e in reversed(entities_sorted)
+        ]
+        return anonymized_text, clean_entities
