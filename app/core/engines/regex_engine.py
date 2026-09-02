@@ -7,7 +7,18 @@ class RegexEngine(BaseEngine):
         self.patterns = {
             "CPF": r"(?<!\d)(?:\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})(?!\d)",
             "CNPJ": r"(?<!\d)(?:\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}|\d{14})(?!\d)",
-            "EMAIL": r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
+            "EMAIL": r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
+            "PROCESSO": r"\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b",
+            "OAB": r"(?i)\bOAB[^\w]*[A-Z]{2}[^\w]*\d+([\.\-]\d+)*\b",
+            "PLACA": r"\b[A-Z]{3}[- ]?[0-9][A-Z0-9][0-9]{2}\b",
+            "CEP": r"\b\d{5}-?\d{3}\b",
+            "MANDADO": r"\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\.\d{2}\.\d{4}-\d{2}\b",
+            "BOLETIM_OCORRENCIA": r"(?i)\b(IP|B\.?O\.?|APF)[^\d]*\d{1,5}\/\d{4}\b",
+            "RG": r"(?i)\b(RG|Identidade)[^\d]*\d{1,2}\.?\d{3}\.?\d{3}-?[A-Z0-9]{0,2}\b",
+            "CNH": r"(?i)\bCNH[^\d]*\d{9,11}\b",
+            "AUTHORITY": r"(?i)\b(Juiz|Desembargador|Ministro|Promotor|Delegado|Excelentíssimo)\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ]+)*)\b",
+            "CODIGO_AUTENTICACAO": r"\b[A-Fa-f0-9]{4}(?:-[A-Fa-f0-9]{4}){3,}\b",
+            "MEDIDA_PROVISORIA": r"(?i)\bMP\s+n[°º]\s*\d[\d\.\-/]+\b",
         }
 
     def detect(self, text: str) -> List[Dict[str, Any]]:

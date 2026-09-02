@@ -8,7 +8,13 @@ class EmbeddingEngine(BaseEngine):
     def __init__(self, threshold: float = 0.8) -> None:
         self.model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
         self.threshold = threshold
-        self.sensitive_terms = ["senha", "conta", "cartão", "confidencial"]
+        self.sensitive_terms = [
+            "senha", "conta", "cartão", "confidencial",
+            "testemunha", "vítima", "menor", "filho", 
+            "veículo", "placa", "paciente", "impetrante", 
+            "presídio", "penitenciária", "CDP", "filiação", "genitora", 
+            "doença", "comorbidade", "tratamento"
+        ]
         self.sensitive_embeddings = self.model.encode(self.sensitive_terms, convert_to_tensor=True)
 
     def detect(self, text: str) -> List[Dict[str, Any]]:
