@@ -3,7 +3,7 @@ import zipfile
 
 import pytest
 
-from app.core.builders.file_builder import build_docx, build_pdf
+from tests.utils import build_docx, build_pdf
 from app.core.extractors.file_extractor import extract_text
 
 

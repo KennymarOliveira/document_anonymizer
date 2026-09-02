@@ -120,26 +120,43 @@ class _FakeEngine(BaseEngine):
         self.alvo = alvo
         self.label = label
 
+    def detect(self, text: str) -> List[Dict[str, Any]]:
+        import re
+        entities = []
+        for match in re.finditer(re.escape(self.alvo), text):
+            entities.append({
+                "start": match.start(),
+                "end": match.end(),
+                "text": match.group(),
+                "label": self.label,
+                "engine": "Fake"
+            })
+        return entities
+
     def anonymize(self, text: str) -> tuple[str, List[Dict[str, Any]]]:
         if self.alvo not in text:
             return text, []
 
-        entities = [{"text": self.alvo, "label": self.label, "engine": "Fake"}]
+        entities = self.detect(text)
         return text.replace(self.alvo, f"[{self.label}_ANONIMIZADO]"), entities
 
 
 def test_hybrid_engine_encadeia_motores_e_acumula_entidades():
+    """HybridEngine deve acionar todos os motores e acumular os resultados."""
     engine = HybridEngine([_FakeEngine("João", "PER"), _FakeEngine("Recife", "LOC")])
     anonymized, entities = engine.anonymize("João mora em Recife")
 
     assert anonymized == "[PER_ANONIMIZADO] mora em [LOC_ANONIMIZADO]"
     assert [e["label"] for e in entities] == ["PER", "LOC"]
 
+def test_hybrid_engine_resolve_conflitos():
+    """Motores diferentes que identificam áreas sobrepostas devem ser resolvidos 
+    pelo HybridEngine mantendo a maior correspondência."""
+    # O primeiro motor acha 'São Paulo' e o segundo acha só 'Paulo'
+    engine = HybridEngine([_FakeEngine("São Paulo", "LOC"), _FakeEngine("Paulo", "PER")])
+    anonymized, entities = engine.anonymize("Viagem para São Paulo")
 
-def test_hybrid_engine_recebe_texto_ja_anonimizado_do_anterior():
-    """O segundo motor opera sobre a saída do primeiro, não sobre o original."""
-    engine = HybridEngine([RegexEngine(), _FakeEngine("[CPF_ANONIMIZADO]", "SEGUNDO")])
-    anonymized, entities = engine.anonymize("CPF 123.456.789-00")
-
-    assert anonymized == "CPF [SEGUNDO_ANONIMIZADO]"
-    assert [e["label"] for e in entities] == ["CPF", "SEGUNDO"]
+    # A entidade mais longa ganha
+    assert anonymized == "Viagem para [LOC_ANONIMIZADO]"
+    assert len(entities) == 1
+    assert entities[0]["label"] == "LOC"
