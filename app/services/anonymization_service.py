@@ -1,5 +1,6 @@
 from app.core.engines.embedding_engine import EmbeddingEngine
 from app.core.engines.hybrid_engine import HybridEngine
+from app.core.engines.presidio_engine import PresidioEngine
 from app.core.engines.regex_engine import RegexEngine
 from app.core.engines.spacy_engine import SpacyNerEngine
 from app.core.extractors.file_extractor import extract_text
@@ -10,10 +11,12 @@ def get_engine(engine_name: str):
         "regex": RegexEngine,
         "spacy": SpacyNerEngine,
         "embedding": EmbeddingEngine,
+        "presidio": PresidioEngine,
     }
     
     if engine_name.lower() == "hybrid":
-        return HybridEngine([RegexEngine(), SpacyNerEngine()])
+        # Inclui Regex, spaCy e Presidio no motor híbrido
+        return HybridEngine([RegexEngine(), SpacyNerEngine(), PresidioEngine()])
     
     engine_cls = engines.get(engine_name.lower())
     if not engine_cls:
