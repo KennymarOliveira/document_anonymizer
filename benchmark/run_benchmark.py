@@ -148,8 +148,7 @@ def main():
         engine_tag = "_".join(results.keys())
 
         if HAS_MATPLOTLIB:
-            comp_path = output_dir / "engines_comparison.png"
-            comp_path = output_dir / f"engines_comparison_{engine_tag}.png"
+            comp_path = output_dir / f"general_engine_metrics_{engine_tag}.png"
             plot_engine_comparison(results, output_path=comp_path)
             print(f"==> Gráfico comparativo geral salvo em: {comp_path.name}")
         else:

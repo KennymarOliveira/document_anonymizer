@@ -228,6 +228,7 @@ def plot_engine_comparison(
     results: Dict[str, EvaluationResult],
     output_path: Optional[str | Path] = None,
     figsize: tuple = (10, 6),
+    title: Optional[str] = None,
 ) -> Optional[Any]:
     """Gera um gráfico comparativo de barras de Precision, Recall e F1 entre os motores."""
     if not HAS_MATPLOTLIB:
@@ -255,8 +256,9 @@ def plot_engine_comparison(
     rects2 = ax.bar(x, recalls, width, label="Recall", color="#2ca02c", edgecolor="white")
     rects3 = ax.bar(x + width, f1s, width, label="F1-Score", color="#17becf", edgecolor="white")
 
+    chart_title = title or "General Engine Metrics"
     ax.set_ylabel("Score", fontsize=12, color="#262626")
-    ax.set_title("Comparação Geral de Performance dos Motores", fontsize=14, pad=14, color="#262626")
+    ax.set_title(chart_title, fontsize=14, pad=14, color="#262626")
     ax.set_xticks(x)
     ax.set_xticklabels([e.capitalize() for e in engines], fontsize=11, color="#262626")
     ax.set_ylim(0, 1.15)
