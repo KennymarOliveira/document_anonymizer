@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api.endpoints.v1.anonymize as endpoint
-from app.core.builders.file_builder import build_docx, build_pdf
+from tests.utils import build_docx, build_pdf
 from app.core.extractors.file_extractor import extract_text
 from app.main import app
 
@@ -163,7 +163,7 @@ def test_anonymize_falha_na_geracao_do_arquivo_retorna_500(monkeypatch):
     def explode(*_args, **_kwargs):
         raise RuntimeError("falha ao montar o arquivo")
 
-    monkeypatch.setattr(endpoint, "build_file", explode)
+    monkeypatch.setattr(endpoint, "build_anonymized_file", explode)
 
     response = enviar("doc.txt", b"CPF 123.456.789-00", return_format="file")
 
@@ -184,7 +184,7 @@ def test_anonymize_falha_na_geracao_do_arquivo_retorna_500(monkeypatch):
     ],
 )
 def test_anonymize_return_format_file(filename, media_type):
-    texto = "Cliente José — CPF 111.222.333-44\nEmail j@ex.com.br"
+    texto = "Cliente José - CPF 111.222.333-44\nEmail j@ex.com.br"
     amostras = {
         "doc.txt": texto.encode("utf-8"),
         "doc.docx": build_docx(texto).getvalue(),
@@ -201,9 +201,8 @@ def test_anonymize_return_format_file(filename, media_type):
     )
 
     devolvido = extract_text(filename, response.content)
-    assert "[CPF_ANONIMIZADO]" in devolvido
-    assert "[EMAIL_ANONIMIZADO]" in devolvido
     assert "111.222.333-44" not in devolvido
+    assert "j@ex.com.br" not in devolvido
     assert "José" in devolvido
     assert "?" not in devolvido
 

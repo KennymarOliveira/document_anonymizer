@@ -1,7 +1,7 @@
 import io
 from typing import List, Dict, Any
 import docx
-import fitz  # PyMuPDF
+import pymupdf
 
 
 def anonymize_docx_in_place(content: bytes, entities: List[Dict[str, Any]]) -> io.BytesIO:
@@ -49,7 +49,7 @@ def anonymize_docx_in_place(content: bytes, entities: List[Dict[str, Any]]) -> i
 
 def anonymize_pdf_in_place(content: bytes, entities: List[Dict[str, Any]]) -> io.BytesIO:
     """Anonimiza um PDF desenhando faixas pretas sólidas sobre as coordenadas do texto sensível."""
-    pdf_doc = fitz.open(stream=content, filetype="pdf")
+    pdf_doc = pymupdf.open(stream=content, filetype="pdf")
 
     sensitive_terms = {e["text"] for e in entities if e.get("text") and e["text"].strip()}
     sorted_terms = sorted(sensitive_terms, key=len, reverse=True)

@@ -113,6 +113,207 @@ def test_regex_engine_texto_sem_dados_sensiveis():
     assert engine.anonymize(text) == (text, [])
 
 
+# --- Testes dos novos padrões do RegexEngine ---
+
+
+def test_regex_engine_processo_cnj():
+    """Detecta número de processo no padrão CNJ."""
+    engine = RegexEngine()
+    text = "Processo nº: 0001234-56.2020.8.13.0034 em tramitação"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[PROCESSO_ANONIMIZADO]" in anonymized
+    assert "0001234-56.2020.8.13.0034" not in anonymized
+    assert entities[0]["label"] == "PROCESSO"
+    assert entities[0]["text"] == "0001234-56.2020.8.13.0034"
+
+
+def test_regex_engine_oab():
+    """Detecta registro da OAB."""
+    engine = RegexEngine()
+    text = "Advogado inscrito na OAB/MG 123456"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[OAB_ANONIMIZADO]" in anonymized
+    assert len(entities) == 1
+    assert entities[0]["label"] == "OAB"
+
+
+def test_regex_engine_placa_veiculo():
+    """Detecta placas de veículos no padrão antigo e Mercosul."""
+    engine = RegexEngine()
+    # Padrão antigo
+    text1 = "Veículo de placa ABC1234 foi apreendido"
+    _, ent1 = engine.anonymize(text1)
+    assert len(ent1) == 1
+    assert ent1[0]["label"] == "PLACA"
+
+    # Padrão Mercosul
+    text2 = "Placa ABC1D23 registrada"
+    _, ent2 = engine.anonymize(text2)
+    assert len(ent2) == 1
+    assert ent2[0]["label"] == "PLACA"
+
+
+def test_regex_engine_cep():
+    """Detecta CEP com e sem hífen."""
+    engine = RegexEngine()
+    text = "Endereço no CEP 30130-000"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[CEP_ANONIMIZADO]" in anonymized
+    assert entities[0]["label"] == "CEP"
+
+    # Sem hífen
+    text2 = "CEP 30130000"
+    _, ent2 = engine.anonymize(text2)
+    assert len(ent2) == 1
+    assert ent2[0]["label"] == "CEP"
+
+
+def test_regex_engine_mandado_prisao():
+    """Detecta número de mandado de prisão no padrão BNMP."""
+    engine = RegexEngine()
+    text = "Mandado 1234567-89.2020.8.13.0000.01.0001-00 expedido"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[MANDADO_ANONIMIZADO]" in anonymized
+    assert entities[0]["label"] == "MANDADO"
+
+
+def test_regex_engine_boletim_ocorrencia():
+    """Detecta IP, B.O. e APF."""
+    engine = RegexEngine()
+    # Inquérito Policial
+    text_ip = "conforme IP 123/2023 da delegacia"
+    _, ent_ip = engine.anonymize(text_ip)
+    assert len(ent_ip) == 1
+    assert ent_ip[0]["label"] == "BOLETIM_OCORRENCIA"
+
+    # Auto de Prisão em Flagrante
+    text_apf = "lavrado APF 45/2021"
+    _, ent_apf = engine.anonymize(text_apf)
+    assert len(ent_apf) == 1
+    assert ent_apf[0]["label"] == "BOLETIM_OCORRENCIA"
+
+
+def test_regex_engine_rg():
+    """Detecta número de RG."""
+    engine = RegexEngine()
+    text = "portador do RG 12.345.678-9"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[RG_ANONIMIZADO]" in anonymized
+    assert entities[0]["label"] == "RG"
+
+
+def test_regex_engine_cnh():
+    """Detecta número de CNH."""
+    engine = RegexEngine()
+    text = "habilitação CNH 12345678901"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[CNH_ANONIMIZADO]" in anonymized
+    assert entities[0]["label"] == "CNH"
+
+
+def test_regex_engine_authority():
+    """Detecta título + nome de autoridades."""
+    engine = RegexEngine()
+    text = "decisão proferida pelo Juiz Carlos Eduardo da Silva"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[AUTHORITY_ANONIMIZADO]" in anonymized
+    assert "Carlos" not in anonymized
+    assert entities[0]["label"] == "AUTHORITY"
+
+
+def test_regex_engine_authority_desembargador():
+    """Detecta Desembargador como autoridade."""
+    engine = RegexEngine()
+    text = "Relatora Desembargador Maria Helena Souza"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[AUTHORITY_ANONIMIZADO]" in anonymized
+    assert "Maria" not in anonymized
+
+
+def test_regex_engine_codigo_autenticacao():
+    """Detecta códigos hexadecimais de autenticação de documentos."""
+    engine = RegexEngine()
+    text = "sob o código C019-B4CF-AAEF-E58A e senha 961D-A3BE-207E-ED02"
+    anonymized, entities = engine.anonymize(text)
+
+    assert anonymized.count("[CODIGO_AUTENTICACAO_ANONIMIZADO]") == 2
+    assert "C019-B4CF-AAEF-E58A" not in anonymized
+    assert "961D-A3BE-207E-ED02" not in anonymized
+    assert len(entities) == 2
+    assert all(e["label"] == "CODIGO_AUTENTICACAO" for e in entities)
+
+
+def test_regex_engine_medida_provisoria():
+    """Detecta referência a Medida Provisória."""
+    engine = RegexEngine()
+    text = "Documento assinado digitalmente conforme MP n° 2.200-2/2001 de 24/08/2001"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[MEDIDA_PROVISORIA_ANONIMIZADO]" in anonymized
+    assert "MP n° 2.200-2/2001" not in anonymized
+    assert entities[0]["label"] == "MEDIDA_PROVISORIA"
+
+
+def test_regex_engine_oab_sem_prefixo():
+    """Detecta OAB em formato simplificado número/UF comum em procurações e atas."""
+    engine = RegexEngine()
+    text = "advogados Dr. Silva (8290/DF) e Dra. Souza (23426/DF)"
+    anonymized, entities = engine.anonymize(text)
+
+    assert anonymized.count("[OAB_ANONIMIZADO]") == 2
+    assert "8290/DF" not in anonymized
+    assert "23426/DF" not in anonymized
+    assert len(entities) == 2
+    assert all(e["label"] == "OAB" for e in entities)
+
+
+def test_regex_engine_processo_tribunais_e_antigo():
+    """Detecta processos com classes de tribunais superiores e padrões estaduais antigos."""
+    engine = RegexEngine()
+    text = "conforme julgado no RE 851.421, ADI 2549 e no processo 2012.00.2.014916-6"
+    anonymized, entities = engine.anonymize(text)
+
+    assert anonymized.count("[PROCESSO_ANONIMIZADO]") == 3
+    assert len(entities) == 3
+    assert all(e["label"] == "PROCESSO" for e in entities)
+
+
+def test_regex_engine_placa_adulterada_e_evita_falso_positivo_siglas():
+    """Detecta placas adulteradas e não confunde siglas processuais como ADI com placa."""
+    engine = RegexEngine()
+    # Sigla de processo não deve virar placa
+    text_adi = "Julgamento da ADI 2549 pelo plenário"
+    _, ent_adi = engine.anonymize(text_adi)
+    assert not any(e["label"] == "PLACA" for e in ent_adi)
+
+    # Placa com caracteres mascarados/adulterados
+    text_placa = "moto com placa HIF ***53 apreendida"
+    anonymized, ent_placa = engine.anonymize(text_placa)
+    assert "[PLACA_ANONIMIZADO]" in anonymized
+    assert any(e["label"] == "PLACA" for e in ent_placa)
+
+
+def test_regex_engine_url_e_data():
+    """Detecta URLs e datas numéricas/extenso."""
+    engine = RegexEngine()
+    text = "Em 22 de outubro de 2020 e 18/03/2020 no site http://www.stf.jus.br/portal"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[DATA_ANONIMIZADO]" in anonymized
+    assert "[URL_ANONIMIZADO]" in anonymized
+    labels = [e["label"] for e in entities]
+    assert "URL" in labels
+    assert "DATA" in labels
+
+
 class _FakeEngine(BaseEngine):
     """Motor de teste que troca um termo fixo, sem carregar modelos."""
 
@@ -120,26 +321,43 @@ class _FakeEngine(BaseEngine):
         self.alvo = alvo
         self.label = label
 
+    def detect(self, text: str) -> List[Dict[str, Any]]:
+        import re
+        entities = []
+        for match in re.finditer(re.escape(self.alvo), text):
+            entities.append({
+                "start": match.start(),
+                "end": match.end(),
+                "text": match.group(),
+                "label": self.label,
+                "engine": "Fake"
+            })
+        return entities
+
     def anonymize(self, text: str) -> tuple[str, List[Dict[str, Any]]]:
         if self.alvo not in text:
             return text, []
 
-        entities = [{"text": self.alvo, "label": self.label, "engine": "Fake"}]
+        entities = self.detect(text)
         return text.replace(self.alvo, f"[{self.label}_ANONIMIZADO]"), entities
 
 
 def test_hybrid_engine_encadeia_motores_e_acumula_entidades():
+    """HybridEngine deve acionar todos os motores e acumular os resultados."""
     engine = HybridEngine([_FakeEngine("João", "PER"), _FakeEngine("Recife", "LOC")])
     anonymized, entities = engine.anonymize("João mora em Recife")
 
     assert anonymized == "[PER_ANONIMIZADO] mora em [LOC_ANONIMIZADO]"
     assert [e["label"] for e in entities] == ["PER", "LOC"]
 
+def test_hybrid_engine_resolve_conflitos():
+    """Motores diferentes que identificam áreas sobrepostas devem ser resolvidos 
+    pelo HybridEngine mantendo a maior correspondência."""
+    # O primeiro motor acha 'São Paulo' e o segundo acha só 'Paulo'
+    engine = HybridEngine([_FakeEngine("São Paulo", "LOC"), _FakeEngine("Paulo", "PER")])
+    anonymized, entities = engine.anonymize("Viagem para São Paulo")
 
-def test_hybrid_engine_recebe_texto_ja_anonimizado_do_anterior():
-    """O segundo motor opera sobre a saída do primeiro, não sobre o original."""
-    engine = HybridEngine([RegexEngine(), _FakeEngine("[CPF_ANONIMIZADO]", "SEGUNDO")])
-    anonymized, entities = engine.anonymize("CPF 123.456.789-00")
-
-    assert anonymized == "CPF [SEGUNDO_ANONIMIZADO]"
-    assert [e["label"] for e in entities] == ["CPF", "SEGUNDO"]
+    # A entidade mais longa ganha
+    assert anonymized == "Viagem para [LOC_ANONIMIZADO]"
+    assert len(entities) == 1
+    assert entities[0]["label"] == "LOC"
