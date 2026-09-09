@@ -262,6 +262,58 @@ def test_regex_engine_medida_provisoria():
     assert entities[0]["label"] == "MEDIDA_PROVISORIA"
 
 
+def test_regex_engine_oab_sem_prefixo():
+    """Detecta OAB em formato simplificado número/UF comum em procurações e atas."""
+    engine = RegexEngine()
+    text = "advogados Dr. Silva (8290/DF) e Dra. Souza (23426/DF)"
+    anonymized, entities = engine.anonymize(text)
+
+    assert anonymized.count("[OAB_ANONIMIZADO]") == 2
+    assert "8290/DF" not in anonymized
+    assert "23426/DF" not in anonymized
+    assert len(entities) == 2
+    assert all(e["label"] == "OAB" for e in entities)
+
+
+def test_regex_engine_processo_tribunais_e_antigo():
+    """Detecta processos com classes de tribunais superiores e padrões estaduais antigos."""
+    engine = RegexEngine()
+    text = "conforme julgado no RE 851.421, ADI 2549 e no processo 2012.00.2.014916-6"
+    anonymized, entities = engine.anonymize(text)
+
+    assert anonymized.count("[PROCESSO_ANONIMIZADO]") == 3
+    assert len(entities) == 3
+    assert all(e["label"] == "PROCESSO" for e in entities)
+
+
+def test_regex_engine_placa_adulterada_e_evita_falso_positivo_siglas():
+    """Detecta placas adulteradas e não confunde siglas processuais como ADI com placa."""
+    engine = RegexEngine()
+    # Sigla de processo não deve virar placa
+    text_adi = "Julgamento da ADI 2549 pelo plenário"
+    _, ent_adi = engine.anonymize(text_adi)
+    assert not any(e["label"] == "PLACA" for e in ent_adi)
+
+    # Placa com caracteres mascarados/adulterados
+    text_placa = "moto com placa HIF ***53 apreendida"
+    anonymized, ent_placa = engine.anonymize(text_placa)
+    assert "[PLACA_ANONIMIZADO]" in anonymized
+    assert any(e["label"] == "PLACA" for e in ent_placa)
+
+
+def test_regex_engine_url_e_data():
+    """Detecta URLs e datas numéricas/extenso."""
+    engine = RegexEngine()
+    text = "Em 22 de outubro de 2020 e 18/03/2020 no site http://www.stf.jus.br/portal"
+    anonymized, entities = engine.anonymize(text)
+
+    assert "[DATA_ANONIMIZADO]" in anonymized
+    assert "[URL_ANONIMIZADO]" in anonymized
+    labels = [e["label"] for e in entities]
+    assert "URL" in labels
+    assert "DATA" in labels
+
+
 class _FakeEngine(BaseEngine):
     """Motor de teste que troca um termo fixo, sem carregar modelos."""
 

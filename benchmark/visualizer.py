@@ -1,13 +1,19 @@
 """Visualização de métricas de benchmark com Matplotlib no estilo das imagens de referência."""
 
 from pathlib import Path
-from typing import Dict, List, Optional
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+from typing import Any, Dict, List, Optional
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+    plt = None
 import numpy as np
 
 from benchmark.evaluator import EvaluationResult
+
 
 
 def plot_confusion_matrix(
@@ -15,7 +21,7 @@ def plot_confusion_matrix(
     output_path: Optional[str | Path] = None,
     figsize: tuple = (7, 6),
     title: Optional[str] = None,
-) -> plt.Figure:
+) -> Optional[Any]:
     """Gera o gráfico de matriz de confusão exatamente no estilo da Imagem 1 de referência.
 
     Características visuais replicadas:
@@ -29,6 +35,9 @@ def plot_confusion_matrix(
     - Título: "{Engine} Confusion Matrix"
     - Sem barra de cores lateral
     """
+    if not HAS_MATPLOTLIB:
+        return None
+
     cm = result.confusion_matrix
     labels = result.labels
 
@@ -105,7 +114,7 @@ def plot_classification_report(
     output_path: Optional[str | Path] = None,
     figsize: tuple = (7, 6),
     title: Optional[str] = None,
-) -> plt.Figure:
+) -> Optional[Any]:
     """Gera o relatório de classificação em heatmap exatamente no estilo da Imagem 2 de referência.
 
     Características visuais replicadas:
@@ -118,6 +127,9 @@ def plot_classification_report(
     - Barra de cores lateral com escala de 0.0 a 1.0
     - Título: "{Engine} Classification Report"
     """
+    if not HAS_MATPLOTLIB:
+        return None
+
     labels = result.labels
     if not labels:
         labels = ["SENSITIVE"]
@@ -216,8 +228,11 @@ def plot_engine_comparison(
     results: Dict[str, EvaluationResult],
     output_path: Optional[str | Path] = None,
     figsize: tuple = (10, 6),
-) -> plt.Figure:
+) -> Optional[Any]:
     """Gera um gráfico comparativo de barras de Precision, Recall e F1 entre os motores."""
+    if not HAS_MATPLOTLIB:
+        return None
+
     engines = list(results.keys())
     if not engines:
         fig, ax = plt.subplots(figsize=figsize)

@@ -1,6 +1,7 @@
 """Script CLI principal para execução do benchmark e geração de métricas visuais."""
 
 import argparse
+from datetime import datetime
 import json
 from pathlib import Path
 import sys
@@ -10,6 +11,7 @@ from benchmark.config import DEFAULT_IOU_THRESHOLD, SUPPORTED_ENGINES
 from benchmark.dataset import load_dataset
 from benchmark.evaluator import evaluate_engine
 from benchmark.visualizer import (
+    HAS_MATPLOTLIB,
     plot_classification_report,
     plot_confusion_matrix,
     plot_engine_comparison,
@@ -92,6 +94,9 @@ def main():
 
     data_dir = Path(args.data_dir)
     output_dir = Path(args.output_dir)
+    base_output_dir = Path(args.output_dir)
+    timestamp_folder = datetime.now().strftime("%d_%m_%Y_TIME_%H_%M_%S")
+    output_dir = base_output_dir / timestamp_folder
     output_dir.mkdir(parents=True, exist_ok=True)
 
     selected_engines = [e.strip().lower() for e in args.engines.split(",") if e.strip()]
@@ -122,26 +127,44 @@ def main():
             res = evaluate_engine(engine_name, dataset, iou_threshold=args.iou_threshold)
             results[engine_name] = res
 
-            cm_path = output_dir / f"{engine_name}_confusion_matrix.png"
-            plot_confusion_matrix(res, output_path=cm_path)
-            print(f"    - Confusion Matrix salva em: {cm_path.name}")
+            if HAS_MATPLOTLIB:
+                cm_path = output_dir / f"{engine_name}_confusion_matrix.png"
+                cm_path = output_dir / f"confusion_matrix_{engine_name}.png"
+                plot_confusion_matrix(res, output_path=cm_path)
+                print(f"    - Confusion Matrix salva em: {cm_path.name}")
 
-            cr_path = output_dir / f"{engine_name}_classification_report.png"
-            plot_classification_report(res, output_path=cr_path)
-            print(f"    - Classification Report salvo em: {cr_path.name}")
+                cr_path = output_dir / f"{engine_name}_classification_report.png"
+                cr_path = output_dir / f"classification_report_{engine_name}.png"
+                plot_classification_report(res, output_path=cr_path)
+                print(f"    - Classification Report salvo em: {cr_path.name}")
+            else:
+                print("    - [INFO] Matplotlib não instalado. Gráficos PNG ignorados.")
 
             print(f"    Score -> Precision: {res.overall_precision:.3f} | Recall: {res.overall_recall:.3f} | F1: {res.overall_f1:.3f}\n")
         except Exception as exc:
             print(f"    [ERRO] Falha ao avaliar '{engine_name}': {exc}\n")
 
     if results:
-        comp_path = output_dir / "engines_comparison.png"
-        plot_engine_comparison(results, output_path=comp_path)
-        print(f"==> Gráfico comparativo geral salvo em: {comp_path.name}")
+        engine_tag = "_".join(results.keys())
+
+        if HAS_MATPLOTLIB:
+            comp_path = output_dir / "engines_comparison.png"
+            comp_path = output_dir / f"engines_comparison_{engine_tag}.png"
+            plot_engine_comparison(results, output_path=comp_path)
+            print(f"==> Gráfico comparativo geral salvo em: {comp_path.name}")
+        else:
+            print("[INFO] Para gerar gráficos visuais (PNG), instale o matplotlib:")
+            print("       poetry install  (ou poetry add matplotlib)\n")
 
         summary_txt_path = output_dir / "summary.txt"
+        summary_txt_path = output_dir / f"summary_{engine_tag}.txt"
         generate_summary_text(results, summary_txt_path)
         print(f"==> Resumo textual salvo em: {summary_txt_path.name}")
+
+        if len(results) > 1:
+            for name, res in results.items():
+                indiv_txt_path = output_dir / f"summary_{name}.txt"
+                generate_summary_text({name: res}, indiv_txt_path)
 
         summary_json = {
             name: {
@@ -162,8 +185,15 @@ def main():
             for name, res in results.items()
         }
         summary_json_path = output_dir / "summary.json"
+        summary_json_path = output_dir / f"summary_{engine_tag}.json"
         summary_json_path.write_text(json.dumps(summary_json, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"==> Resumo JSON salvo em: {summary_json_path.name}")
+
+        if len(results) > 1:
+            for name, res in results.items():
+                indiv_json = {name: summary_json[name]}
+                indiv_json_path = output_dir / f"summary_{name}.json"
+                indiv_json_path.write_text(json.dumps(indiv_json, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print("\n" + "=" * 70)
     print("Benchmark concluído com sucesso!")

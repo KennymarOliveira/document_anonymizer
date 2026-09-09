@@ -159,6 +159,7 @@ def test_evaluate_predictions_calculation():
 # --- 5. Testes de Visualização (Matplotlib) ---
 
 def test_visualizer_generates_and_saves_plots(tmp_path):
+    pytest.importorskip("matplotlib")
     labels = ["PESSOA", "CPF", "LOCAL", "ORGANIZACAO"]
     cm = np.array([
         [25, 0, 1, 0],
