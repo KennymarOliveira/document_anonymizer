@@ -43,6 +43,17 @@ def test_regex_engine_cnpj_nao_casa_como_cpf():
     assert [e["label"] for e in entities] == ["CNPJ"]
 
 
+def test_regex_engine_processo_antigo_adi_nao_vira_cnpj():
+    """Processo com 14 dígitos e sufixo ADI deve ser PROCESSO e não ser confundido com CNPJ numérico."""
+    engine = RegexEngine()
+    anonymized, entities = engine.anonymize("conforme 20080020133831ADI julgado")
+
+    assert "[PROCESSO_ANONIMIZADO]" in anonymized
+    assert "[CNPJ_ANONIMIZADO]" not in anonymized
+    assert len(entities) == 1
+    assert entities[0]["label"] == "PROCESSO"
+
+
 def test_regex_engine_ocorrencias_repetidas_geram_entidades_separadas():
     """Cada ocorrência é substituída e contabilizada individualmente."""
     engine = RegexEngine()

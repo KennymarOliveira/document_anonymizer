@@ -13,7 +13,8 @@ from benchmark.dataset import (
     load_annotations_json,
     load_dataset,
 )
-from benchmark.evaluator import EvaluationResult, evaluate_predictions
+from benchmark.evaluator import EvaluationResult, evaluate_engine, evaluate_predictions
+from benchmark.run_benchmark import generate_summary_text
 from benchmark.visualizer import (
     plot_classification_report,
     plot_confusion_matrix,
@@ -71,8 +72,14 @@ def test_normalize_label():
     assert normalize_label("EMAIL_ADDRESS") == "EMAIL"
     assert normalize_label("PHONE_NUMBER") == "TELEFONE"
     assert normalize_label("CPF") == "CPF"
+    assert normalize_label("AUTHORITY") == "AUTORIDADE"
+    assert normalize_label("CODIGO_AUTENTICACAO") == "COD_AUTENTICACAO"
+    assert normalize_label("URL") == "URL"
+    assert normalize_label("DATA") == "DATA"
+    assert normalize_label("DATE_TIME") == "DATA"
     assert normalize_label("SEMANTIC_SENSITIVE") == "SEMANTICO"
     assert normalize_label(None) == "DESCONHECIDO"
+    assert normalize_label("outro_qualquer") == "OUTRO_QUALQUER"
 
 
 # --- 3. Testes de Dataset ---
@@ -198,6 +205,149 @@ def test_visualizer_generates_and_saves_plots(tmp_path):
     assert cr_path.stat().st_size > 5000
 
     comp_path = tmp_path / "comp.png"
-    plot_engine_comparison({"Engine A": res, "Engine B": res}, output_path=comp_path)
+    fig = plot_engine_comparison({"Engine A": res, "Engine B": res}, output_path=comp_path)
     assert comp_path.exists()
     assert comp_path.stat().st_size > 5000
+    if fig is not None:
+        assert fig.axes[0].get_title() == "General Engine Metrics"
+
+
+def test_plot_engine_comparison_custom_title_and_empty():
+    pytest.importorskip("matplotlib")
+    res = EvaluationResult(
+        engine_name="mock",
+        confusion_matrix=np.array([[1]]),
+        labels=["PESSOA"],
+        precision_per_class={"PESSOA": 1.0},
+        recall_per_class={"PESSOA": 1.0},
+        f1_per_class={"PESSOA": 1.0},
+        support_per_class={"PESSOA": 1},
+        overall_precision=1.0,
+        overall_recall=1.0,
+        overall_f1=1.0,
+        total_documents=1,
+        total_gt_entities=1,
+        total_predicted_entities=1,
+        true_positives_count=1,
+        false_positives_count=0,
+        false_negatives_count=0,
+    )
+
+    fig_custom = plot_engine_comparison({"Mock": res}, title="Meu Titulo Customizado")
+    assert fig_custom.axes[0].get_title() == "Meu Titulo Customizado"
+
+    fig_empty = plot_engine_comparison({})
+    assert "Nenhum resultado para comparar" in fig_empty.axes[0].texts[0].get_text()
+
+
+def test_visualizer_fallback_sem_matplotlib(monkeypatch):
+    """Garante que funções do visualizer retornem None de forma segura quando matplotlib não estiver disponível."""
+    import benchmark.visualizer as vis
+    monkeypatch.setattr(vis, "HAS_MATPLOTLIB", False)
+
+    dummy_res = EvaluationResult(
+        engine_name="dummy",
+        confusion_matrix=np.array([]),
+        labels=[],
+        precision_per_class={},
+        recall_per_class={},
+        f1_per_class={},
+        support_per_class={},
+        overall_precision=0.0,
+        overall_recall=0.0,
+        overall_f1=0.0,
+        total_documents=0,
+        total_gt_entities=0,
+        total_predicted_entities=0,
+        true_positives_count=0,
+        false_positives_count=0,
+        false_negatives_count=0,
+    )
+
+    assert vis.plot_confusion_matrix(dummy_res) is None
+    assert vis.plot_classification_report(dummy_res) is None
+    assert vis.plot_engine_comparison({"dummy": dummy_res}) is None
+
+
+def test_load_dataset_com_json(tmp_path):
+    """Valida o carregamento integrado do dataset a partir da estrutura originals/ e ground_truth/."""
+    orig_dir = tmp_path / "originals"
+    gt_dir = tmp_path / "ground_truth"
+    orig_dir.mkdir()
+    gt_dir.mkdir()
+
+    # Cria documento original em TXT
+    doc_txt = orig_dir / "peticao.txt"
+    doc_txt.write_text("Cliente com CPF 123.456.789-00 em Brasilia.", encoding="utf-8")
+
+    # Cria anotações correspondentes no ground_truth
+    anotacoes = {
+        "entities": [
+            {"text": "123.456.789-00", "label": "CPF", "start": 16, "end": 30},
+            {"text": "Brasilia", "label": "LOC", "start": 34, "end": 42},
+        ]
+    }
+    (gt_dir / "peticao.json").write_text(json.dumps(anotacoes), encoding="utf-8")
+
+    samples = load_dataset(tmp_path)
+    assert len(samples) == 1
+    sample = samples[0]
+    assert sample.filename == "peticao.txt"
+    assert "CPF 123.456.789-00" in sample.original_text
+    assert len(sample.ground_truth_entities) == 2
+    assert sample.ground_truth_entities[0]["label"] == "CPF"
+
+
+def test_evaluate_engine_com_instancia_mock():
+    """Valida a orquestração de evaluate_engine com injeção de motor mock."""
+    sample = DocumentSample(
+        filename="doc.txt",
+        original_text="Texto com CPF 111.222.333-44",
+        ground_truth_entities=[{"text": "111.222.333-44", "label": "CPF", "start": 14, "end": 28}],
+    )
+
+    class MockEngine:
+        def detect(self, text: str):
+            return [{"text": "111.222.333-44", "label": "CPF", "start": 14, "end": 28}]
+
+    res = evaluate_engine("mock_engine", [sample], engine_instance=MockEngine())
+    assert res.engine_name == "mock_engine"
+    assert res.true_positives_count == 1
+    assert res.false_positives_count == 0
+    assert res.false_negatives_count == 0
+    assert res.overall_precision == 1.0
+    assert res.overall_recall == 1.0
+    assert res.overall_f1 == 1.0
+
+
+def test_generate_summary_text(tmp_path):
+    """Valida a formatação e geração do relatório textual de benchmark."""
+    res = EvaluationResult(
+        engine_name="regex",
+        confusion_matrix=np.array([[5]]),
+        labels=["CPF"],
+        precision_per_class={"CPF": 1.0},
+        recall_per_class={"CPF": 1.0},
+        f1_per_class={"CPF": 1.0},
+        support_per_class={"CPF": 5},
+        overall_precision=1.0,
+        overall_recall=1.0,
+        overall_f1=1.0,
+        total_documents=1,
+        total_gt_entities=5,
+        total_predicted_entities=5,
+        true_positives_count=5,
+        false_positives_count=0,
+        false_negatives_count=0,
+    )
+
+    output_txt = tmp_path / "summary_test.txt"
+    generate_summary_text({"regex": res}, output_txt)
+
+    assert output_txt.exists()
+    conteudo = output_txt.read_text(encoding="utf-8")
+    assert "RELATÓRIO CONSOLIDADO DO BENCHMARK DE ANONIMIZAÇÃO" in conteudo
+    assert "Motor: REGEX" in conteudo
+    assert "Documentos avaliados:       1" in conteudo
+    assert "Overall Precision:          1.0000" in conteudo
+    assert "CPF" in conteudo
