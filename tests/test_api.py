@@ -211,3 +211,20 @@ def test_anonymize_return_format_invalido_retorna_422():
     response = enviar("doc.txt", b"texto", return_format="xml")
 
     assert response.status_code == 422
+
+
+def test_anonymize_pdf_multipage_retorna_page_nas_entidades():
+    import pymupdf
+    doc = pymupdf.open()
+    doc.new_page().insert_text((50, 50), "Pagina 1: CPF 111.222.333-44")
+    doc.new_page().insert_text((50, 50), "Pagina 2: Email teste@exemplo.com")
+    pdf_bytes = doc.tobytes()
+
+    response = enviar("documento.pdf", pdf_bytes)
+    assert response.status_code == 200
+    corpo = response.json()
+    assert len(corpo["entities_found"]) == 2
+    entidades_por_label = {e["label"]: e for e in corpo["entities_found"]}
+    assert entidades_por_label["CPF"]["page"] == 1
+    assert entidades_por_label["EMAIL"]["page"] == 2
+

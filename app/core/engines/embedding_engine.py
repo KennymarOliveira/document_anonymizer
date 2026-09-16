@@ -16,23 +16,24 @@ class EmbeddingEngine(BaseEngine):
             "doença", "comorbidade", "tratamento"
         ]
         self.sensitive_embeddings = self.model.encode(self.sensitive_terms, convert_to_tensor=True)
+        self._cache: Dict[str, bool] = {}
 
     def detect(self, text: str) -> List[Dict[str, Any]]:
         matches = list(re.finditer(r"\b\w+\b", text))
         if not matches:
             return []
 
-        # Extrai palavras únicas e calcula embeddings em batch
-        unique_words = list({m.group() for m in matches})
-        word_embeddings = self.model.encode(unique_words, convert_to_tensor=True)
-        cos_scores = util.cos_sim(word_embeddings, self.sensitive_embeddings)
-        max_scores, _ = torch.max(cos_scores, dim=1)
+        words_to_check = {m.group() for m in matches}
+        uncached_words = [w for w in words_to_check if w not in self._cache]
 
-        sensitive_word_set = {
-            unique_words[i]
-            for i, score in enumerate(max_scores)
-            if score.item() > self.threshold
-        }
+        if uncached_words:
+            word_embeddings = self.model.encode(uncached_words, convert_to_tensor=True)
+            cos_scores = util.cos_sim(word_embeddings, self.sensitive_embeddings)
+            max_scores, _ = torch.max(cos_scores, dim=1)
+            for i, score in enumerate(max_scores):
+                self._cache[uncached_words[i]] = bool(score.item() > self.threshold)
+
+        sensitive_word_set = {w for w in words_to_check if self._cache.get(w, False)}
 
         entities = []
         for m in matches:

@@ -67,3 +67,40 @@ def test_build_anonymized_file_routing():
 def test_build_anonymized_file_unsupported_extension():
     with pytest.raises(ValueError, match="Extensão não suportada"):
         build_anonymized_file("doc.csv", b"1,2,3", [])
+
+
+def test_anonymize_pdf_in_place_with_page_targeting():
+    import pymupdf
+    doc = pymupdf.open()
+    doc.new_page().insert_text((50, 50), "Pagina 1: Joao da Silva e CPF 111.222.333-44")
+    doc.new_page().insert_text((50, 50), "Pagina 2: Joao da Silva permanece aqui")
+    pdf_bytes = doc.tobytes()
+
+    # Tag apenas para página 1
+    entities = [{"text": "Joao da Silva", "page": 1}, {"text": "111.222.333-44", "page": 1}]
+    anonymized = anonymize_pdf_in_place(pdf_bytes, entities)
+
+    res = pymupdf.open(stream=anonymized.getvalue(), filetype="pdf")
+    p1 = res[0].get_text()
+    p2 = res[1].get_text()
+
+    assert "Joao da Silva" not in p1
+    assert "111.222.333-44" not in p1
+    assert "Joao da Silva" in p2
+
+
+def test_anonymize_pdf_in_place_multipage_concurrency():
+    import pymupdf
+    doc = pymupdf.open()
+    for i in range(6):
+        doc.new_page().insert_text((50, 50), f"Pagina {i+1}: Segredo-{i+1}")
+    pdf_bytes = doc.tobytes()
+
+    entities = [{"text": f"Segredo-{i+1}", "page": i + 1} for i in range(6)]
+    anonymized = anonymize_pdf_in_place(pdf_bytes, entities)
+
+    res = pymupdf.open(stream=anonymized.getvalue(), filetype="pdf")
+    assert len(res) == 6
+    for i in range(6):
+        assert f"Segredo-{i+1}" not in res[i].get_text()
+

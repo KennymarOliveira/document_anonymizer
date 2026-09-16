@@ -4,7 +4,10 @@ from app.core.engines.base import BaseEngine
 
 class SpacyNerEngine(BaseEngine):
     def __init__(self) -> None:
-        self.nlp = spacy.load("pt_core_news_lg")
+        self.nlp = spacy.load(
+            "pt_core_news_lg",
+            disable=["parser", "lemmatizer", "morphologizer", "attribute_ruler"]
+        )
 
     def detect(self, text: str) -> List[Dict[str, Any]]:
         doc = self.nlp(text)
