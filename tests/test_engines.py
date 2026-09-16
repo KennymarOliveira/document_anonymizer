@@ -372,3 +372,53 @@ def test_hybrid_engine_resolve_conflitos():
     assert anonymized == "Viagem para [LOC_ANONIMIZADO]"
     assert len(entities) == 1
     assert entities[0]["label"] == "LOC"
+
+
+def test_hybrid_engine_prioridade_hierarquica_regex():
+    """Regex (Tier 1) deve prevalecer sobre outro motor (Tier 2/3) em sobreposição."""
+    from app.core.engines.regex_engine import RegexEngine
+
+    # Fake que gera entidade no mesmo span do CPF
+    class OverlappingFake(BaseEngine):
+        def detect(self, text: str):
+            return [{"start": 10, "end": 28, "text": "CPF 123.456.789-00", "label": "GENERIC", "engine": "Fake"}]
+        def anonymize(self, text: str):
+            return text, []
+
+    engine = HybridEngine([OverlappingFake(), RegexEngine()])
+    anonymized, entities = engine.anonymize("O autor tem CPF 123.456.789-00 no registro")
+
+    # Regex (Tier 100) deve vencer o Fake (Tier 50)
+    assert any(e["label"] == "CPF" for e in entities)
+
+
+def test_embedding_engine_deteccao_contextual():
+    """EmbeddingEngine deve detectar sentenças com contexto sensível e ignorar texto comum."""
+    from app.core.engines.embedding_engine import EmbeddingEngine
+
+    engine = EmbeddingEngine(threshold=0.75)
+    text_sensitive = "O paciente possui diagnóstico médico sigiloso e tratamento de comorbidade grave."
+    entities = engine.detect(text_sensitive)
+    assert len(entities) == 1
+    assert entities[0]["label"] == "SEMANTIC_SENSITIVE"
+
+    text_normal = "A petição inicial preenche todos os requisitos do Código de Processo Civil."
+    entities_normal = engine.detect(text_normal)
+    assert len(entities_normal) == 0
+
+
+def test_legal_ner_engine_deteccao_e_filtro_vocativo():
+    """LegalNerEngine deve detectar nomes próprios e ignorar vocativos e papéis na denylist."""
+    from app.core.engines.legal_ner_engine import LegalNerEngine
+
+    engine = LegalNerEngine()
+    text = "Vossa Excelência, o réu Carlos Eduardo Rocha compareceu perante o Douto Parquet."
+    entities = engine.detect(text)
+
+    # Carlos Eduardo Rocha deve ser detectado
+    texts = [e["text"] for e in entities]
+    assert any("Carlos Eduardo" in t for t in texts)
+    # Vossa Excelência e Douto Parquet devem ser filtrados
+    assert not any("Vossa Excelência" in t for t in texts)
+    assert not any("Douto Parquet" in t for t in texts)
+

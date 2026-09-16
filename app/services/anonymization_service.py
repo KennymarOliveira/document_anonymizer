@@ -8,6 +8,8 @@ from app.core.engines.spacy_engine import SpacyNerEngine
 from app.core.extractors.file_extractor import extract_text_by_pages
 
 
+from app.core.engines.legal_ner_engine import LegalNerEngine
+
 def get_engine(engine_name: str):
     name = engine_name.strip().lower()
     aliases = {
@@ -15,12 +17,16 @@ def get_engine(engine_name: str):
         "híbrido": "hybrid",
         "hibrido": "hybrid",
         "embeddings": "embedding",
+        "legal": "legal_ner",
+        "lenerbr": "legal_ner",
+        "lener": "legal_ner",
     }
     name = aliases.get(name, name)
 
     engines = {
         "regex": RegexEngine,
         "spacy": SpacyNerEngine,
+        "legal_ner": LegalNerEngine,
         "embedding": EmbeddingEngine,
         "presidio": PresidioEngine,
     }
@@ -28,6 +34,11 @@ def get_engine(engine_name: str):
     if name == "hybrid":
         # Inclui Regex, spaCy e Presidio no motor híbrido
         return HybridEngine([RegexEngine(), SpacyNerEngine(), PresidioEngine()])
+        try:
+            ner_engine = LegalNerEngine()
+        except Exception:
+            ner_engine = SpacyNerEngine()
+        return HybridEngine([RegexEngine(), ner_engine, PresidioEngine()])
     
     engine_cls = engines.get(name)
     if not engine_cls:
