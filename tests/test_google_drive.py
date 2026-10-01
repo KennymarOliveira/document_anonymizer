@@ -37,6 +37,38 @@ def test_google_drive_mock_endpoint_file():
     assert len(response.content) > 0
 
 
+def test_google_drive_mock_endpoint_file_black_white_text():
+    response = client.post(
+        "/api/v1/anonymize/google-doc",
+        json={
+            "file_id": "doc-corporativo-123",
+            "engine": "regex",
+            "return_format": "file",
+            "redaction_mode": "black_white_text",
+        },
+    )
+    assert response.status_code == 200
+    docx_type = (
+        "application/vnd.openxmlformats-officedocument."
+        "wordprocessingml.document"
+    )
+    assert response.headers["content-type"] == docx_type
+    assert len(response.content) > 0
+
+
+def test_google_drive_mock_invalid_redaction_mode():
+    response = client.post(
+        "/api/v1/anonymize/google-doc",
+        json={
+            "file_id": "doc-corporativo-123",
+            "engine": "regex",
+            "return_format": "file",
+            "redaction_mode": "invalid_mode",
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_google_drive_mock_not_found():
     response = client.post(
         "/api/v1/anonymize/google-doc",

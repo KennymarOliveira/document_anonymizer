@@ -36,7 +36,9 @@ async def anonymize_google_doc(
         anonymized_text, entities = process_document(filename, content, request.engine)
 
         if request.return_format == "file":
-            file_stream, media_type = build_anonymized_file(filename, content, entities)
+            file_stream, media_type = build_anonymized_file(
+                filename, content, entities, redaction_mode=request.redaction_mode
+            )
         else:
             file_stream = media_type = None
 
