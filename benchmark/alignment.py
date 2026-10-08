@@ -1,6 +1,6 @@
 """Alinhamento e matching de entidades preditas contra o ground truth."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from benchmark.config import normalize_label
 
 

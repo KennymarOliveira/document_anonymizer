@@ -4,10 +4,10 @@ import zipfile
 import pytest
 from fastapi.testclient import TestClient
 
-import app.api.endpoints.v1.anonymize as endpoint
+import app.services.views as endpoint
 from tests.utils import build_docx, build_pdf
 from app.core.extractors.file_extractor import extract_text
-from app.main import app
+from routes import app
 
 client = TestClient(app)
 

@@ -1,7 +1,6 @@
 """Testes automatizados para o módulo de benchmark de avaliação de métricas."""
 
 import json
-from pathlib import Path
 import numpy as np
 import pytest
 

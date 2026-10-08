@@ -1,4 +1,3 @@
-import re
 from typing import Any, Dict, List, Optional, Tuple
 import torch
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline

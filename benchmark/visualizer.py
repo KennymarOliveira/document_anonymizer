@@ -1,7 +1,7 @@
 """Visualização de métricas de benchmark com Matplotlib no estilo das imagens de referência."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 try:
     import matplotlib
     matplotlib.use("Agg")
@@ -55,7 +55,7 @@ def plot_confusion_matrix(
     max_val = np.max(cm) if np.max(cm) > 0 else 1
     cmap = plt.cm.Blues
 
-    im = ax.imshow(cm, interpolation="nearest", cmap=cmap, vmin=0, vmax=max_val)
+    ax.imshow(cm, interpolation="nearest", cmap=cmap, vmin=0, vmax=max_val)
 
     ax.set_xticks(np.arange(n))
     ax.set_yticks(np.arange(n))
@@ -135,7 +135,6 @@ def plot_classification_report(
         labels = ["SENSITIVE"]
 
     n_rows = len(labels)
-    n_cols = 4
 
     data_metrics = np.zeros((n_rows, 3))
     data_support = np.zeros((n_rows, 1))

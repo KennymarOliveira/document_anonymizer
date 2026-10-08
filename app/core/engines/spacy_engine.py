@@ -41,9 +41,6 @@ class SpacyNerEngine(BaseEngine):
                 final_end = final_start + len(ent_text)
 
                 entities.append({
-                    "start": ent.start_char,
-                    "end": ent.end_char,
-                    "text": ent.text,
                     "start": final_start,
                     "end": final_end,
                     "text": ent_text,
