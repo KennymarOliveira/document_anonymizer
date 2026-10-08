@@ -211,3 +211,48 @@ def test_anonymize_return_format_invalido_retorna_422():
     response = enviar("doc.txt", b"texto", return_format="xml")
 
     assert response.status_code == 422
+
+
+def test_anonymize_pdf_multipage_retorna_page_nas_entidades():
+    import pymupdf
+    doc = pymupdf.open()
+    doc.new_page().insert_text((50, 50), "Pagina 1: CPF 111.222.333-44")
+    doc.new_page().insert_text((50, 50), "Pagina 2: Email teste@exemplo.com")
+    pdf_bytes = doc.tobytes()
+
+    response = enviar("documento.pdf", pdf_bytes)
+    assert response.status_code == 200
+    corpo = response.json()
+    assert len(corpo["entities_found"]) == 2
+    entidades_por_label = {e["label"]: e for e in corpo["entities_found"]}
+    assert entidades_por_label["CPF"]["page"] == 1
+    assert entidades_por_label["EMAIL"]["page"] == 2
+
+
+def test_anonymize_return_format_file_black_white_text():
+    texto = "Cliente Jose - CPF 111.222.333-44"
+    response = enviar(
+        "doc.docx",
+        build_docx(texto).getvalue(),
+        return_format="file",
+        redaction_mode="black_white_text",
+    )
+    assert response.status_code == 200
+    docx_type = (
+        "application/vnd.openxmlformats-officedocument."
+        "wordprocessingml.document"
+    )
+    assert response.headers["content-type"].startswith(docx_type)
+    devolvido = extract_text("doc.docx", response.content)
+    assert "111.222.333-44" in devolvido
+    assert "Jose" in devolvido
+
+
+def test_anonymize_redaction_mode_invalido_retorna_422():
+    response = enviar(
+        "doc.txt",
+        b"texto",
+        return_format="file",
+        redaction_mode="modo_inexistente",
+    )
+    assert response.status_code == 422

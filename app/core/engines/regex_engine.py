@@ -31,7 +31,11 @@ class RegexEngine(BaseEngine):
             "BOLETIM_OCORRENCIA": r"(?i)\b(IP|B\.?O\.?|APF)[^\d]*\d{1,5}\/\d{4}\b",
             "RG": r"(?i)\b(RG|Identidade)[^\d]*\d{1,2}\.?\d{3}\.?\d{3}-?[A-Z0-9]{0,2}\b",
             "CNH": r"(?i)\bCNH[^\d]*\d{9,11}\b",
-            "AUTHORITY": r"(?i)\b(Juiz|Desembargador|Ministro|Promotor|Delegado|Excelentíssimo)\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ]+)*)\b",
+            "AUTHORITY": (
+                r"\b(?:Juiz|Desembargador|Ministro|Promotor|Delegado)\s+"
+                r"(?!(?:de\s+Direito|Criminal|Federal|Estadual|Eleitoral|Militar|do\s+Trabalho|Substituto|Titular|proferir|determinar|condenar|absolver|da\b))\b"
+                r"[A-ZÀ-Ý][a-zà-ÿ]+(?:\s+(?:da|de|do|das|dos)\s+[A-ZÀ-Ý][a-zà-ÿ]+|\s+[A-ZÀ-Ý][a-zà-ÿ]+)+\b"
+            ),
             "CODIGO_AUTENTICACAO": r"\b[A-Fa-f0-9]{4}(?:-[A-Fa-f0-9]{4}){3,}\b",
             "MEDIDA_PROVISORIA": r"(?i)\bMP\s+n[°º]\s*\d[\d\.\-/]+\b",
             "URL": r"https?://[a-zA-Z0-9_.-]+(?:\.[a-zA-Z]{2,})+(?:/[^\s\)\"\'>]*)?",

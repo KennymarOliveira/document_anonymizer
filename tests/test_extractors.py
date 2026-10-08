@@ -4,7 +4,7 @@ import zipfile
 import pytest
 
 from tests.utils import build_docx, build_pdf
-from app.core.extractors.file_extractor import extract_text
+from app.core.extractors.file_extractor import extract_text, extract_text_by_pages
 
 
 @pytest.fixture
@@ -74,3 +74,40 @@ def test_extract_text_docx_nao_zip_levanta_value_error():
 def test_extract_text_docx_zip_sem_partes_opc_levanta_value_error(zip_sem_partes_opc):
     with pytest.raises(ValueError, match="DOCX inválido"):
         extract_text("documento.docx", zip_sem_partes_opc)
+
+
+def test_extract_text_by_pages_txt():
+    pages = extract_text_by_pages("doc.txt", b"Texto simples")
+    assert pages == [(1, "Texto simples")]
+
+
+def test_extract_text_by_pages_docx():
+    conteudo = build_docx("Linha 1\nLinha 2").getvalue()
+    pages = extract_text_by_pages("doc.docx", conteudo)
+    assert pages == [(1, "Linha 1\nLinha 2")]
+
+
+def test_extract_text_by_pages_pdf():
+    import pymupdf
+    doc = pymupdf.open()
+    doc.new_page().insert_text((50, 50), "Texto da Pagina 1")
+    doc.new_page().insert_text((50, 50), "Texto da Pagina 2")
+    pdf_bytes = doc.tobytes()
+
+    pages = extract_text_by_pages("doc.pdf", pdf_bytes)
+    assert len(pages) == 2
+    assert pages[0][0] == 1
+    assert "Texto da Pagina 1" in pages[0][1]
+    assert pages[1][0] == 2
+    assert "Texto da Pagina 2" in pages[1][1]
+
+
+def test_extract_text_by_pages_unsupported_extension():
+    with pytest.raises(ValueError, match="Extensão não suportada"):
+        extract_text_by_pages("doc.xlsx", b"")
+
+
+def test_extract_text_by_pages_pdf_corrompido():
+    with pytest.raises(ValueError, match="PDF inválido"):
+        extract_text_by_pages("doc.pdf", b"nao pdf")
+

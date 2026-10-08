@@ -17,18 +17,33 @@ router = APIRouter()
 async def anonymize_file(
     file: UploadFile = File(...),
     engine: str = Form("hybrid"),
-    return_format: Literal["json", "file"] = Form("json")
+    return_format: Literal["json", "file"] = Form("json"),
+    redaction_mode: Literal[
+        "blackout", "black_white_text", "tarja_preta", "tarja_texto_branco"
+    ] = Form(
+        "blackout",
+        description=(
+            "Modo de tarja: 'blackout' (tarja preta sólida) ou "
+            "'black_white_text' (tarja preta com texto branco)"
+        ),
+    ),
 ):
     if not file.filename:
-        raise HTTPException(status_code=400, detail="O arquivo enviado não possui nome.")
+        raise HTTPException(
+            status_code=400, detail="O arquivo enviado não possui nome."
+        )
 
     content = await file.read()
 
     try:
-        anonymized_text, entities = process_document(file.filename, content, engine)
+        anonymized_text, entities = process_document(
+            file.filename, content, engine
+        )
 
         if return_format == "file":
-            file_stream, media_type = build_anonymized_file(file.filename, content, entities)
+            file_stream, media_type = build_anonymized_file(
+                file.filename, content, entities, redaction_mode=redaction_mode
+            )
         else:
             file_stream = media_type = None
 
@@ -45,11 +60,13 @@ async def anonymize_file(
         return StreamingResponse(
             file_stream,
             media_type=media_type,
-            headers={"Content-Disposition": f"attachment; filename={new_filename}"}
+            headers={
+                "Content-Disposition": f"attachment; filename={new_filename}"
+            },
         )
 
     return AnonymizationResponse(
         original_filename=file.filename,
         anonymized_text=anonymized_text,
-        entities_found=[AnonymizedEntity(**e) for e in entities]
+        entities_found=[AnonymizedEntity(**e) for e in entities],
     )

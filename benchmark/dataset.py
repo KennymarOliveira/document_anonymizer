@@ -41,21 +41,30 @@ def load_annotations_json(json_path: Path | str, original_text: Optional[str] = 
         raw_entities = []
 
     normalized_entities = []
+    cursor = 0
     for item in raw_entities:
         text = item.get("text", "")
         label = item.get("label", "SENSITIVE")
         start = item.get("start")
         end = item.get("end")
 
-        # Se start e end não foram fornecidos mas temos o texto original, calcula offsets
-        if (start is None or end is None) and original_text and text:
-            idx = original_text.find(text)
-            if idx != -1:
-                start = idx
-                end = idx + len(text)
-            else:
-                start = -1
-                end = -1
+        # Se temos o texto original, valida e ajusta os offsets se houver divergência
+        if original_text and text:
+            is_valid_slice = (
+                start is not None
+                and end is not None
+                and 0 <= start < end <= len(original_text)
+                and original_text[start:end] == text
+            )
+            if not is_valid_slice:
+                # Procura a partir do cursor recente ou busca global no documento
+                idx = original_text.find(text, max(0, cursor - 50))
+                if idx == -1:
+                    idx = original_text.find(text)
+                if idx != -1:
+                    start = idx
+                    end = idx + len(text)
+                    cursor = end
 
         normalized_entities.append({
             "text": text,
