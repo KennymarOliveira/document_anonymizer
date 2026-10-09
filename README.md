@@ -13,6 +13,9 @@ A aplicação utiliza múltiplos motores de detecção — Regex, spaCy (NER), E
 - [Tecnologias](#tecnologias)
 - [Pré-requisitos](#pré-requisitos)
 - [Instalação](#instalação)
+  - [Opção 1: Usando Poetry (Recomendado)](#opção-1-usando-poetry-recomendado)
+  - [Opção 2: Usando Pip e Virtualenv Tradicional (Sem Poetry)](#opção-2-usando-pip-e-virtualenv-tradicional-sem-poetry)
+  - [Download dos Modelos de NLP](#download-dos-modelos-de-nlp)
 - [Configurações e Variáveis de Ambiente](#configurações-e-variáveis-de-ambiente)
 - [Como Executar](#como-executar)
 - [Como Usar a API](#como-usar-a-api)
@@ -123,24 +126,112 @@ app/core/builders/file_builder.py    app/schemas/anonymizer.py
 ## Pré-requisitos
 
 - **Python** 3.11 ou superior
-- **Poetry** instalado ([guia de instalação](https://python-poetry.org/docs/#installation))
+- **Poetry** (recomendado) ou **pip** + **venv**
 - (Opcional) GPU NVIDIA com driver compatível para aceleração do `EmbeddingEngine` e `LegalNerEngine`
 
 ---
 
 ## Instalação
 
+O projeto utiliza o **Poetry** para gerenciar dependências e ambientes virtuais, mas também oferece compatibilidade com `pip` via `requirements.txt`.
+
+### Opção 1: Usando Poetry (Recomendado)
+
+O Poetry gerencia automaticamente o ambiente virtual e instala as versões exatas travadas em `poetry.lock`.
+
+#### 1. Instalar o Poetry (se ainda não tiver)
+
 ```bash
-# 1. Clone o repositório
+# Via pipx (recomendado):
+pipx install poetry
+
+# Ou via instalador oficial:
+curl -sSL https://install.python-poetry.org | python3 -
+
+# Ou via pip:
+pip install poetry
+```
+
+#### 2. Clonar o repositório e entrar no diretório
+
+```bash
 git clone <url-do-repositorio>
 cd document_anonymizer
+```
 
-# 2. Instale as dependências com Poetry
+#### 3. Instalar as dependências do projeto
+
+```bash
+# Instala todas as dependências (produção + desenvolvimento/testes/benchmark):
 poetry install
 
-# 3. Baixe o modelo de NLP do spaCy para Português
+# Caso deseje instalar apenas dependências de produção:
+poetry install --without dev
+```
+
+#### 4. Baixar o modelo de NLP do spaCy para Português
+
+O motor spaCy necessita do modelo pré-treinado `pt_core_news_lg`:
+
+```bash
 poetry run python -m spacy download pt_core_news_lg
 ```
+
+---
+
+### Opção 2: Usando Pip e Virtualenv Tradicional (Sem Poetry)
+
+Se preferir não usar o Poetry, você pode utilizar o ambiente virtual padrão do Python:
+
+#### 1. Clonar o repositório e entrar na pasta
+
+```bash
+git clone <url-do-repositorio>
+cd document_anonymizer
+```
+
+#### 2. Criar e ativar um ambiente virtual
+
+```bash
+# Cria o ambiente virtual
+python3 -m venv .venv
+
+# Ativa o ambiente virtual (Linux/macOS):
+source .venv/bin/activate
+
+# Ativa o ambiente virtual (Windows PowerShell):
+.venv\Scripts\Activate.ps1
+```
+
+#### 3. Instalar as dependências via Pip
+
+```bash
+# Atualiza o pip
+pip install --upgrade pip
+
+# Instala as dependências da aplicação:
+pip install -r requirements.txt
+
+# (Opcional) Instala dependências de testes e benchmarks:
+pip install -r requirements-dev.txt
+```
+
+#### 4. Baixar o modelo de NLP do spaCy para Português
+
+```bash
+python -m spacy download pt_core_news_lg
+```
+
+---
+
+### Download dos Modelos de NLP
+
+- **spaCy (`pt_core_news_lg`)**: Precisa ser baixado manualmente uma única vez conforme o passo 4 acima.
+- **Hugging Face / Transformers**:
+  - `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (usado pelo `EmbeddingEngine`)
+  - `pierreguillou/ner-bert-base-cased-pt-lenerbr` (usado pelo `LegalNerEngine`)
+
+  Esses modelos são **baixados e cacheados automaticamente** pelo Hugging Face na primeira vez em que os respectivos motores forem executados (armazenados em `~/.cache/huggingface/hub/`).
 
 ---
 
@@ -166,10 +257,26 @@ USE_GOOGLE_DRIVE_MOCK=true
 
 ## Como Executar
 
+> **Atenção:** Antes de executar a aplicação pela primeira vez, certifique-se de ter concluído o processo de [Instalação](#instalação) (especialmente a instalação de dependências e o download do modelo spaCy).
+
 ### Modo desenvolvimento (com hot-reload)
 
+**Se estiver utilizando Poetry:**
+
 ```bash
+# Execução direta pelo Poetry:
 poetry run uvicorn routes:app --reload
+
+# Ou ativando o ambiente virtual do Poetry previamente:
+poetry shell
+uvicorn routes:app --reload
+```
+
+**Se estiver utilizando Virtualenv tradicional (`venv` / `pip`):**
+
+```bash
+# Com o ambiente virtual ativado (source .venv/bin/activate):
+uvicorn routes:app --reload
 ```
 
 A API estará disponível em `http://127.0.0.1:8000`.
