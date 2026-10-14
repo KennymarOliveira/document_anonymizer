@@ -212,3 +212,49 @@ def test_anonymize_pdf_in_place_black_white_text():
     page_text = res[0].get_text()
     assert "Joao da Silva" in page_text
 
+
+def test_anonymize_pdf_black_white_text_nao_duplica_texto_reescrito():
+    import pymupdf
+
+    texto = "CLÁUSULA QUARTA - DO PREÇO"
+    original_pdf = build_pdf(texto).getvalue()
+
+    anonymized_stream = anonymize_pdf_in_place(
+        original_pdf,
+        [{"text": texto}],
+        redaction_mode="black_white_text",
+    )
+
+    result = pymupdf.open(stream=anonymized_stream.getvalue(), filetype="pdf")
+    assert result[0].get_text().count(texto) == 1
+
+
+def test_anonymize_pdf_ignora_termo_curto_dentro_de_outra_palavra():
+    texto = "PRESTACAO PRIVADO PRESENTE"
+    original_pdf = build_pdf(texto).getvalue()
+
+    anonymized_stream = anonymize_pdf_in_place(
+        original_pdf,
+        [{"text": "PR"}],
+        redaction_mode="blackout",
+    )
+
+    extracted = extract_text("teste.pdf", anonymized_stream.getvalue())
+    assert extracted.strip() == texto
+
+
+def test_anonymize_pdf_prioriza_termo_longo_sobreposto():
+    import pymupdf
+
+    texto = "CLAUSULA QUARTA - DO PRECO"
+    original_pdf = build_pdf(texto).getvalue()
+
+    anonymized_stream = anonymize_pdf_in_place(
+        original_pdf,
+        [{"text": "CLAUSULA"}, {"text": texto}],
+        redaction_mode="black_white_text",
+    )
+
+    result = pymupdf.open(stream=anonymized_stream.getvalue(), filetype="pdf")
+    assert result[0].get_text().count(texto) == 1
+

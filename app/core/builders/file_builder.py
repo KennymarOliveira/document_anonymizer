@@ -220,6 +220,38 @@ def anonymize_pdf_in_place(
         else:
             global_terms.add(text)
 
+    def _draw_white_text(page, rect: pymupdf.Rect, text: str) -> None:
+        """Desenha texto conhecido sem reextrair conteúdo do retângulo do PDF.
+
+        Se não houver espaço mesmo com fonte reduzida, não desenha nada. Assim a
+        tarja nunca avança para texto vizinho nem produz uma substituição parcial.
+        """
+        # Primeiro preserva uma pequena margem; se necessário, tenta novamente
+        # com toda a área da tarja e reduz a fonte até 0,5 pt.
+        for padding in (0.5, 0):
+            draw_rect = pymupdf.Rect(rect)
+            draw_rect.x0 += padding
+            draw_rect.y0 += padding
+            draw_rect.x1 -= padding
+            draw_rect.y1 -= padding
+            if draw_rect.is_empty or draw_rect.is_infinite:
+                continue
+
+            font_size = min(10.0, draw_rect.height * 0.75)
+            while font_size >= 0.5:
+                remaining = page.insert_textbox(
+                    draw_rect,
+                    text,
+                    fontname="helv",
+                    fontsize=font_size,
+                    color=(1, 1, 1),
+                    align=pymupdf.TEXT_ALIGN_CENTER,
+                    overlay=True,
+                )
+                if remaining >= 0:
+                    return
+                font_size -= 0.5
+
     def _redact_page(page_idx: int) -> None:
         page = pdf_doc[page_idx]
         page_num = page_idx + 1
@@ -227,16 +259,15 @@ def anonymize_pdf_in_place(
         if not terms_for_page:
             return
 
+        candidates: List[tuple[pymupdf.Rect, str]] = []
+
         single_word_terms = {t for t in terms_for_page if " " not in t}
         multi_word_terms = sorted(
             [t for t in terms_for_page if " " in t], key=len, reverse=True
         )
 
-        unmatched_single = set(single_word_terms)
-
         if single_word_terms:
             single_terms_lower = {t.lower(): t for t in single_word_terms}
-            matched_single = set()
 
             for w in page.get_text("words"):
                 raw_l = w[4].lower()
@@ -249,40 +280,30 @@ def anonymize_pdf_in_place(
 
                 if matched_term:
                     rect = pymupdf.Rect(w[:4])
-                    if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
-                        page.add_redact_annot(
-                            rect,
-                            text=w[4],
-                            fill=(0, 0, 0),
-                            text_color=(1, 1, 1),
-                            align=pymupdf.TEXT_ALIGN_CENTER,
-                        )
-                    else:
-                        page.add_redact_annot(rect, fill=(0, 0, 0))
-                    matched_single.add(matched_term)
+                    candidates.append((rect, matched_term))
 
-            unmatched_single = set(single_word_terms) - matched_single
-        else:
-            unmatched_single = set()
-
-        terms_to_search = multi_word_terms + list(unmatched_single)
-        for term in terms_to_search:
+        # A busca textual do PDF aceita correspondências parciais. Por isso,
+        # termos de uma palavra que não foram encontrados como palavras inteiras
+        # não podem usar search_for: "PR" não deve atingir "PRESTAÇÃO".
+        for term in multi_word_terms:
             for rect in page.search_for(term):
-                if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
-                    clip_txt = (
-                        page.get_text("text", clip=rect).strip() or term
-                    )
-                    page.add_redact_annot(
-                        rect,
-                        text=clip_txt,
-                        fill=(0, 0, 0),
-                        text_color=(1, 1, 1),
-                        align=pymupdf.TEXT_ALIGN_CENTER,
-                    )
-                else:
-                    page.add_redact_annot(rect, fill=(0, 0, 0))
+                candidates.append((rect, term))
+
+        # Prefere a expressão mais longa e evita anotações visuais sobrepostas.
+        candidates.sort(key=lambda item: -len(item[1]))
+        selected: List[tuple[pymupdf.Rect, str]] = []
+        for rect, term in candidates:
+            if any(rect.intersects(selected_rect) for selected_rect, _ in selected):
+                continue
+            selected.append((rect, term))
+
+        for rect, _ in selected:
+            page.add_redact_annot(rect, fill=(0, 0, 0))
 
         page.apply_redactions()
+        if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
+            for rect, text in selected:
+                _draw_white_text(page, rect, text)
 
     num_pages = len(pdf_doc)
     for idx in range(num_pages):
