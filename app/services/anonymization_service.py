@@ -15,6 +15,9 @@ def get_engine(engine_name: str):
         "presídio": "presidio",
         "híbrido": "hybrid",
         "hibrido": "hybrid",
+        "híbrido_legal": "hybrid_legal",
+        "hibrido_legal": "hybrid_legal",
+        "legal_hybrid": "hybrid_legal",
         "embeddings": "embedding",
         "legal": "legal_ner",
         "lenerbr": "legal_ner",
@@ -33,6 +36,12 @@ def get_engine(engine_name: str):
     if name == "hybrid":
         # Inclui Regex, spaCy e Presidio no motor híbrido
         return HybridEngine([RegexEngine(), SpacyNerEngine(), PresidioEngine()])
+
+    if name == "hybrid_legal":
+        # Mantém o híbrido padrão estável e adiciona o modelo jurídico LeNER-BR.
+        return HybridEngine(
+            [RegexEngine(), LegalNerEngine(), SpacyNerEngine(), PresidioEngine()]
+        )
     
     engine_cls = engines.get(name)
     if not engine_cls:

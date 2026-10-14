@@ -153,7 +153,10 @@ def test_normalize_redaction_mode():
 
 def test_build_anonymized_file_txt_black_white_text():
     content = b"Nome: Joao da Silva, CPF: 123.456.789-00"
-    entities = [{"text": "Joao da Silva"}, {"text": "123.456.789-00"}]
+    entities = [
+        {"text": "Joao da Silva", "label": "PER"},
+        {"text": "123.456.789-00", "label": "CPF"},
+    ]
 
     stream, media_type = build_anonymized_file(
         "teste.txt", content, entities, redaction_mode="black_white_text"
@@ -161,8 +164,11 @@ def test_build_anonymized_file_txt_black_white_text():
 
     assert media_type == "text/plain"
     text = stream.getvalue().decode("utf-8")
-    assert "\033[40;97mJoao da Silva\033[0m" in text
-    assert "\033[40;97m123.456.789-00\033[0m" in text
+    assert "[PER_001]" in text
+    assert "[CPF_001]" in text
+    assert "Joao da Silva" not in text
+    assert "123.456.789-00" not in text
+    assert "\033" not in text
 
 
 def test_anonymize_docx_in_place_black_white_text():

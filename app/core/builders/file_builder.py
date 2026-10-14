@@ -53,6 +53,26 @@ def normalize_redaction_mode(mode: str | None) -> str:
     )
 
 
+def build_txt_entity_identifiers(
+    entities: List[Dict[str, Any]],
+) -> Dict[tuple[str, str], str]:
+    """Cria IDs estáveis por tipo e valor para a versão TXT de testes."""
+    identifiers: Dict[tuple[str, str], str] = {}
+    label_counts: Dict[str, int] = defaultdict(int)
+
+    for entity in entities:
+        value = entity.get("text")
+        if not value:
+            continue
+        label = str(entity.get("label") or "DADO").upper()
+        key = (label, value)
+        if key not in identifiers:
+            label_counts[label] += 1
+            identifiers[key] = f"[{label}_{label_counts[label]:03d}]"
+
+    return identifiers
+
+
 def _style_run_black_white_text(run: Any) -> None:
     """Aplica formatação de texto branco com fundo preto em um run."""
     run.font.color.rgb = RGBColor(255, 255, 255)
@@ -289,14 +309,22 @@ def build_anonymized_file(
         entities_sorted = sorted(
             entities, key=lambda x: len(x.get("text", "")), reverse=True
         )
-        for e in entities_sorted:
-            val = e.get("text")
-            if val:
-                if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
-                    replacement = f"\033[40;97m{val}\033[0m"
-                else:
-                    replacement = "█" * len(val)
-                text = text.replace(val, replacement)
+
+        if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
+            # TXT não suporta formatação visual portável. Use identificadores
+            # rastreáveis para teste sem manter o valor sensível no arquivo.
+            replacements = build_txt_entity_identifiers(entities)
+
+            for entity in entities_sorted:
+                value = entity.get("text")
+                if value:
+                    label = str(entity.get("label") or "DADO").upper()
+                    text = text.replace(value, replacements[(label, value)])
+        else:
+            for entity in entities_sorted:
+                value = entity.get("text")
+                if value:
+                    text = text.replace(value, "█" * len(value))
         return io.BytesIO(text.encode("utf-8")), "text/plain"
 
     if ext in ["doc", "docx"]:

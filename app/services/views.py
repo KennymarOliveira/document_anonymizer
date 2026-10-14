@@ -8,12 +8,19 @@ Fluxo de cada view:
 Erros de domínio são lançados como ``AppException`` e convertidos em JSON
 pelo handler global registrado em ``routes.py``.
 """
+import io
+from collections import defaultdict
+from pathlib import Path
 from typing import Any, Dict, List, Literal
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
 
-from app.core.builders.file_builder import build_anonymized_file
+from app.core.builders.file_builder import (
+    build_anonymized_file,
+    build_txt_entity_identifiers,
+)
 from app.core.integrations.google_drive import (
     GoogleDriveClientInterface,
     get_google_drive_client,
@@ -49,6 +56,7 @@ def _run_pipeline(
     engine: str,
     return_format: str,
     redaction_mode: str,
+    include_report: bool = False,
 ):
     """Executa extração -> anonimização -> (opcional) montagem do arquivo.
 
@@ -61,6 +69,12 @@ def _run_pipeline(
             file_stream, media_type = build_anonymized_file(
                 filename, content, entities, redaction_mode=redaction_mode
             )
+            if include_report:
+                if Path(filename).suffix.lower() != ".txt":
+                    raise ValueError(
+                        "O relatório de detecções está disponível somente para arquivos TXT."
+                    )
+                return _txt_zip_response(filename, file_stream, entities)
             return _file_response(filename, file_stream, media_type)
 
     except AppException:
@@ -81,6 +95,75 @@ def _file_response(filename: str, file_stream, media_type: str) -> StreamingResp
         media_type=media_type,
         headers=create_download_headers(get_anonymized_filename(filename)),
     )
+
+
+def _txt_zip_response(
+    filename: str,
+    anonymized_stream: io.BytesIO,
+    entities: List[Dict[str, Any]],
+) -> StreamingResponse:
+    """Entrega o TXT anonimizado e seu relatório de detecções em um ZIP."""
+    original_name = Path(filename).name
+    anonymized_name = get_anonymized_filename(original_name)
+    zip_name = f"anonimizacao_{Path(original_name).stem}.zip"
+    report = _build_txt_detection_report(original_name, entities)
+
+    zip_stream = io.BytesIO()
+    with ZipFile(zip_stream, "w", ZIP_DEFLATED) as archive:
+        archive.writestr(anonymized_name, anonymized_stream.getvalue())
+        archive.writestr("relatorio_deteccoes.txt", report.encode("utf-8"))
+    zip_stream.seek(0)
+
+    return StreamingResponse(
+        zip_stream,
+        media_type="application/zip",
+        headers=create_download_headers(zip_name),
+    )
+
+
+def _build_txt_detection_report(
+    filename: str, entities: List[Dict[str, Any]]
+) -> str:
+    """Cria um relatório de teste com o mapeamento entre IDs e valores detectados."""
+    identifiers = build_txt_entity_identifiers(entities)
+    grouped: Dict[tuple[str, str], Dict[str, Any]] = defaultdict(
+        lambda: {"count": 0, "pages": set(), "engines": set()}
+    )
+
+    for entity in entities:
+        value = entity.get("text")
+        if not value:
+            continue
+        label = str(entity.get("label") or "DADO").upper()
+        group = grouped[(label, value)]
+        group["count"] += 1
+        if entity.get("page") is not None:
+            group["pages"].add(entity["page"])
+        if entity.get("engine"):
+            group["engines"].add(entity["engine"])
+
+    lines = [
+        "RELATÓRIO DE DETECÇÕES",
+        f"Arquivo de origem: {filename}",
+        "Uso exclusivo para testes: este relatório contém dados sensíveis detectados.",
+        "",
+    ]
+    for key, data in grouped.items():
+        label, value = key
+        pages = ", ".join(str(page) for page in sorted(data["pages"])) or "não informada"
+        engines = ", ".join(sorted(data["engines"])) or "não informado"
+        lines.extend(
+            [
+                identifiers[key],
+                f"- tipo: {label}",
+                f"- valor detectado: {value}",
+                f"- ocorrências: {data['count']}",
+                f"- página(s): {pages}",
+                f"- motor(es): {engines}",
+                "",
+            ]
+        )
+    return "\n".join(lines)
 
 
 def _json_response(
@@ -105,11 +188,25 @@ async def anonymize_file(
             "'black_white_text' (tarja preta com texto branco)"
         ),
     ),
+    include_report: bool = Form(
+        False,
+        description=(
+            "Para TXT, devolve um ZIP com o arquivo anonimizado e um relatório "
+            "de detecções sem dados sensíveis"
+        ),
+    ),
 ):
     """Recebe um arquivo via upload e o anonimiza."""
     validate_uploaded_file(file.filename)
     content = await file.read()
-    return _run_pipeline(file.filename, content, engine, return_format, redaction_mode)
+    return _run_pipeline(
+        file.filename,
+        content,
+        engine,
+        return_format,
+        redaction_mode,
+        include_report,
+    )
 
 
 @router.post(
@@ -135,7 +232,12 @@ async def anonymize_google_doc(
         ) from exc
 
     return _run_pipeline(
-        filename, content, request.engine, request.return_format, request.redaction_mode
+        filename,
+        content,
+        request.engine,
+        request.return_format,
+        request.redaction_mode,
+        request.include_report,
     )
 
 
