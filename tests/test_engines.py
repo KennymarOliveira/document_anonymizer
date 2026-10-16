@@ -392,6 +392,38 @@ def test_hybrid_engine_prioridade_hierarquica_regex():
     assert any(e["label"] == "CPF" for e in entities)
 
 
+def test_get_engine_hybrid_legal_inclui_todos_os_motores(monkeypatch):
+    """A variante híbrida jurídica deve incluir o LeNER-BR sem alterar o híbrido padrão."""
+    import app.services.anonymization_service as service
+
+    class FakeRegex:
+        pass
+
+    class FakeLegal:
+        pass
+
+    class FakeSpacy:
+        pass
+
+    class FakePresidio:
+        pass
+
+    monkeypatch.setattr(service, "RegexEngine", FakeRegex)
+    monkeypatch.setattr(service, "LegalNerEngine", FakeLegal)
+    monkeypatch.setattr(service, "SpacyNerEngine", FakeSpacy)
+    monkeypatch.setattr(service, "PresidioEngine", FakePresidio)
+
+    engine = service.get_engine("hibrido_legal")
+
+    assert isinstance(engine, HybridEngine)
+    assert [type(item) for item in engine.engines] == [
+        FakeRegex,
+        FakeLegal,
+        FakeSpacy,
+        FakePresidio,
+    ]
+
+
 def test_embedding_engine_deteccao_contextual():
     """EmbeddingEngine deve detectar sentenças com contexto sensível e ignorar texto comum."""
     from app.core.engines.embedding_engine import EmbeddingEngine

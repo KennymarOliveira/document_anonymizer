@@ -82,9 +82,8 @@ class RegexEngine(BaseEngine):
                 + anonymized_text[ent["end"]:]
             )
 
-        clean_entities = [
-            {"text": e["text"], "label": e["label"], "engine": e["engine"]}
-            for e in matches
-        ]
+        # Preserva offsets para que os construtores de arquivo possam reutilizar
+        # a decisão do motor sem procurar o texto novamente.
+        clean_entities = [dict(e) for e in matches]
 
         return anonymized_text, clean_entities

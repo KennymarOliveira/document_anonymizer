@@ -53,6 +53,26 @@ def normalize_redaction_mode(mode: str | None) -> str:
     )
 
 
+def build_txt_entity_identifiers(
+    entities: List[Dict[str, Any]],
+) -> Dict[tuple[str, str], str]:
+    """Cria IDs estáveis por tipo e valor para a versão TXT de testes."""
+    identifiers: Dict[tuple[str, str], str] = {}
+    label_counts: Dict[str, int] = defaultdict(int)
+
+    for entity in entities:
+        value = entity.get("text")
+        if not value:
+            continue
+        label = str(entity.get("label") or "DADO").upper()
+        key = (label, value)
+        if key not in identifiers:
+            label_counts[label] += 1
+            identifiers[key] = f"[{label}_{label_counts[label]:03d}]"
+
+    return identifiers
+
+
 def _style_run_black_white_text(run: Any) -> None:
     """Aplica formatação de texto branco com fundo preto em um run."""
     run.font.color.rgb = RGBColor(255, 255, 255)
@@ -189,34 +209,91 @@ def anonymize_pdf_in_place(
 
     page_terms_map: Dict[int, set[str]] = defaultdict(set)
     global_terms: set[str] = set()
+    page_rects_map: Dict[
+        int, list[tuple[pymupdf.Rect, str, str, int]]
+    ] = defaultdict(list)
+    global_rects: list[tuple[pymupdf.Rect, str, str, int]] = []
 
     for e in entities:
         text = e.get("text", "").strip()
         if not text:
             continue
         page_num = e.get("page")
+        tier = int(e.get("tier", 50))
+        entity_rects = e.get("rects")
+        if entity_rects:
+            targets = (
+                page_rects_map[page_num]
+                if page_num is not None
+                else global_rects
+            )
+            render_segments = e.get("render_segments") or []
+            if render_segments:
+                for segment in render_segments:
+                    segment_rect = segment.get("rect")
+                    segment_text = str(segment.get("text") or text)
+                    if segment_rect:
+                        targets.append(
+                            (pymupdf.Rect(segment_rect), text, segment_text, tier)
+                        )
+            else:
+                for raw_rect in entity_rects:
+                    targets.append((pymupdf.Rect(raw_rect), text, text, tier))
+            continue
         if page_num is not None:
             page_terms_map[page_num].add(text)
         else:
             global_terms.add(text)
 
+    def _draw_white_text(page, rect: pymupdf.Rect, text: str) -> None:
+        """Desenha texto conhecido sem reextrair conteúdo do retângulo do PDF.
+
+        Se não houver espaço mesmo com fonte reduzida, não desenha nada. Assim a
+        tarja nunca avança para texto vizinho nem produz uma substituição parcial.
+        """
+        # Primeiro preserva uma pequena margem; se necessário, tenta novamente
+        # com toda a área da tarja e reduz a fonte até 0,5 pt.
+        for padding in (0.5, 0):
+            draw_rect = pymupdf.Rect(rect)
+            draw_rect.x0 += padding
+            draw_rect.y0 += padding
+            draw_rect.x1 -= padding
+            draw_rect.y1 -= padding
+            if draw_rect.is_empty or draw_rect.is_infinite:
+                continue
+
+            font_size = min(10.0, draw_rect.height * 0.75)
+            while font_size >= 0.5:
+                remaining = page.insert_textbox(
+                    draw_rect,
+                    text,
+                    fontname="helv",
+                    fontsize=font_size,
+                    color=(1, 1, 1),
+                    align=pymupdf.TEXT_ALIGN_CENTER,
+                    overlay=True,
+                )
+                if remaining >= 0:
+                    return
+                font_size -= 0.5
+
     def _redact_page(page_idx: int) -> None:
         page = pdf_doc[page_idx]
         page_num = page_idx + 1
         terms_for_page = page_terms_map.get(page_num, set()) | global_terms
-        if not terms_for_page:
+        positioned_candidates = page_rects_map.get(page_num, []) + global_rects
+        if not terms_for_page and not positioned_candidates:
             return
+
+        candidates: List[tuple[pymupdf.Rect, str, str, int]] = list(positioned_candidates)
 
         single_word_terms = {t for t in terms_for_page if " " not in t}
         multi_word_terms = sorted(
             [t for t in terms_for_page if " " in t], key=len, reverse=True
         )
 
-        unmatched_single = set(single_word_terms)
-
         if single_word_terms:
             single_terms_lower = {t.lower(): t for t in single_word_terms}
-            matched_single = set()
 
             for w in page.get_text("words"):
                 raw_l = w[4].lower()
@@ -229,40 +306,30 @@ def anonymize_pdf_in_place(
 
                 if matched_term:
                     rect = pymupdf.Rect(w[:4])
-                    if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
-                        page.add_redact_annot(
-                            rect,
-                            text=w[4],
-                            fill=(0, 0, 0),
-                            text_color=(1, 1, 1),
-                            align=pymupdf.TEXT_ALIGN_CENTER,
-                        )
-                    else:
-                        page.add_redact_annot(rect, fill=(0, 0, 0))
-                    matched_single.add(matched_term)
+                    candidates.append((rect, matched_term, matched_term, 0))
 
-            unmatched_single = set(single_word_terms) - matched_single
-        else:
-            unmatched_single = set()
-
-        terms_to_search = multi_word_terms + list(unmatched_single)
-        for term in terms_to_search:
+        # A busca textual do PDF aceita correspondências parciais. Por isso,
+        # termos de uma palavra que não foram encontrados como palavras inteiras
+        # não podem usar search_for: "PR" não deve atingir "PRESTAÇÃO".
+        for term in multi_word_terms:
             for rect in page.search_for(term):
-                if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
-                    clip_txt = (
-                        page.get_text("text", clip=rect).strip() or term
-                    )
-                    page.add_redact_annot(
-                        rect,
-                        text=clip_txt,
-                        fill=(0, 0, 0),
-                        text_color=(1, 1, 1),
-                        align=pymupdf.TEXT_ALIGN_CENTER,
-                    )
-                else:
-                    page.add_redact_annot(rect, fill=(0, 0, 0))
+                candidates.append((rect, term, term, 0))
+
+        # Prefere a expressão mais longa e evita anotações visuais sobrepostas.
+        candidates.sort(key=lambda item: (-item[3], -len(item[1])))
+        selected: List[tuple[pymupdf.Rect, str]] = []
+        for rect, term, draw_text, _ in candidates:
+            if any(rect.intersects(selected_rect) for selected_rect, _ in selected):
+                continue
+            selected.append((rect, draw_text))
+
+        for rect, _ in selected:
+            page.add_redact_annot(rect, fill=(0, 0, 0))
 
         page.apply_redactions()
+        if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
+            for rect, text in selected:
+                _draw_white_text(page, rect, text)
 
     num_pages = len(pdf_doc)
     for idx in range(num_pages):
@@ -289,14 +356,22 @@ def build_anonymized_file(
         entities_sorted = sorted(
             entities, key=lambda x: len(x.get("text", "")), reverse=True
         )
-        for e in entities_sorted:
-            val = e.get("text")
-            if val:
-                if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
-                    replacement = f"\033[40;97m{val}\033[0m"
-                else:
-                    replacement = "█" * len(val)
-                text = text.replace(val, replacement)
+
+        if mode == REDACTION_MODE_BLACK_WHITE_TEXT:
+            # TXT não suporta formatação visual portável. Use identificadores
+            # rastreáveis para teste sem manter o valor sensível no arquivo.
+            replacements = build_txt_entity_identifiers(entities)
+
+            for entity in entities_sorted:
+                value = entity.get("text")
+                if value:
+                    label = str(entity.get("label") or "DADO").upper()
+                    text = text.replace(value, replacements[(label, value)])
+        else:
+            for entity in entities_sorted:
+                value = entity.get("text")
+                if value:
+                    text = text.replace(value, "█" * len(value))
         return io.BytesIO(text.encode("utf-8")), "text/plain"
 
     if ext in ["doc", "docx"]:

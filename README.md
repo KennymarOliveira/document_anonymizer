@@ -341,9 +341,14 @@ curl -X POST http://127.0.0.1:8000/api/v1/anonymize/ \
 | Parâmetro | Tipo | Padrão | Descrição |
 |---|---|---|---|
 | `file` | Upload | *(obrigatório)* | Arquivo `.txt`, `.doc`, `.docx` ou `.pdf` |
-| `engine` | String | `hybrid` | Motor: `regex`, `spacy`, `embedding`, `presidio`, `legal_ner` ou `hybrid` |
+| `engine` | String | `hybrid` | Motor: `regex`, `spacy`, `embedding`, `presidio`, `legal_ner`, `hybrid` ou `hybrid_legal` |
 | `return_format` | String | `json` | Formato: `json` ou `file` |
 | `redaction_mode` | String | `blackout` | Modo da tarja: `blackout` ou `black_white_text` |
+| `include_report` | Boolean | `false` | Para TXT, devolve um ZIP com o TXT anonimizado e `relatorio_deteccoes.txt` |
+
+> O `relatorio_deteccoes.txt` é destinado exclusivamente a testes: ele relaciona
+> cada identificador do TXT ao valor sensível detectado. Não o distribua ou use
+> fora de ambientes controlados.
 
 **Resposta JSON (200):**
 
@@ -485,6 +490,15 @@ O motor **recomendado**. Combina `RegexEngine` + `SpacyNerEngine` + `PresidioEng
 
 **Uso:** `engine=hybrid` *(padrão)*
 
+### 7. `hybrid_legal`
+
+Combina `RegexEngine` + `LegalNerEngine` + `SpacyNerEngine` + `PresidioEngine`.
+É indicado quando se deseja a cobertura do motor híbrido junto às entidades
+jurídicas identificadas pelo modelo LeNER-BR. Em conflitos de sobreposição,
+Regex tem prioridade, seguido pelo Legal NER, spaCy e Presidio.
+
+**Uso:** `engine=hybrid_legal` (aliases: `hibrido_legal`, `híbrido_legal`, `legal_hybrid`)
+
 ---
 
 ## Modos de Redação (Tarjas)
@@ -493,6 +507,11 @@ Ao solicitar a resposta em arquivo (`return_format=file`), o parâmetro `redacti
 
 - **`blackout`** (ou `tarja_preta`): tarja sólida preta desenhada sobre as coordenadas exatas da entidade.
 - **`black_white_text`** (ou `tarja_texto_branco`): tarja preta com texto branco indicando o tipo de entidade suprimida (ex: `[CPF]`, `[PER]`).
+
+Em arquivos TXT não há formatação visual portável. Por isso, ambos os modos usam
+substituições seguras: blocos `█` no modo `blackout` e identificadores como
+`[CPF_001]` no modo `black_white_text`. Repetições do mesmo dado recebem o
+mesmo identificador, facilitando a comparação durante testes.
 
 ---
 

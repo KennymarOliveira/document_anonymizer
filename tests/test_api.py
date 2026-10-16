@@ -248,6 +248,31 @@ def test_anonymize_return_format_file_black_white_text():
     assert "Jose" in devolvido
 
 
+def test_anonymize_txt_com_relatorio_retorna_zip():
+    response = enviar(
+        "contrato.txt",
+        b"CPF 111.222.333-44 e CPF 111.222.333-44",
+        return_format="file",
+        redaction_mode="black_white_text",
+        include_report="true",
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/zip")
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert set(archive.namelist()) == {
+            "anonimizado_contrato.txt",
+            "relatorio_deteccoes.txt",
+        }
+        anonymized = archive.read("anonimizado_contrato.txt").decode("utf-8")
+        report = archive.read("relatorio_deteccoes.txt").decode("utf-8")
+
+    assert anonymized == "CPF [CPF_001] e CPF [CPF_001]"
+    assert "[CPF_001]" in report
+    assert "ocorrências: 2" in report
+    assert "valor detectado: 111.222.333-44" in report
+
+
 def test_anonymize_redaction_mode_invalido_retorna_422():
     response = enviar(
         "doc.txt",
