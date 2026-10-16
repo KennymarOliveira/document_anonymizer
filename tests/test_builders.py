@@ -153,7 +153,10 @@ def test_normalize_redaction_mode():
 
 def test_build_anonymized_file_txt_black_white_text():
     content = b"Nome: Joao da Silva, CPF: 123.456.789-00"
-    entities = [{"text": "Joao da Silva"}, {"text": "123.456.789-00"}]
+    entities = [
+        {"text": "Joao da Silva", "label": "PER"},
+        {"text": "123.456.789-00", "label": "CPF"},
+    ]
 
     stream, media_type = build_anonymized_file(
         "teste.txt", content, entities, redaction_mode="black_white_text"
@@ -161,8 +164,11 @@ def test_build_anonymized_file_txt_black_white_text():
 
     assert media_type == "text/plain"
     text = stream.getvalue().decode("utf-8")
-    assert "\033[40;97mJoao da Silva\033[0m" in text
-    assert "\033[40;97m123.456.789-00\033[0m" in text
+    assert "[PER_001]" in text
+    assert "[CPF_001]" in text
+    assert "Joao da Silva" not in text
+    assert "123.456.789-00" not in text
+    assert "\033" not in text
 
 
 def test_anonymize_docx_in_place_black_white_text():
@@ -205,4 +211,73 @@ def test_anonymize_pdf_in_place_black_white_text():
     res = pymupdf.open(stream=anonymized_stream.getvalue(), filetype="pdf")
     page_text = res[0].get_text()
     assert "Joao da Silva" in page_text
+
+
+def test_anonymize_pdf_black_white_text_nao_duplica_texto_reescrito():
+    import pymupdf
+
+    texto = "CLÁUSULA QUARTA - DO PREÇO"
+    original_pdf = build_pdf(texto).getvalue()
+
+    anonymized_stream = anonymize_pdf_in_place(
+        original_pdf,
+        [{"text": texto}],
+        redaction_mode="black_white_text",
+    )
+
+    result = pymupdf.open(stream=anonymized_stream.getvalue(), filetype="pdf")
+    assert result[0].get_text().count(texto) == 1
+
+
+def test_anonymize_pdf_ignora_termo_curto_dentro_de_outra_palavra():
+    texto = "PRESTACAO PRIVADO PRESENTE"
+    original_pdf = build_pdf(texto).getvalue()
+
+    anonymized_stream = anonymize_pdf_in_place(
+        original_pdf,
+        [{"text": "PR"}],
+        redaction_mode="blackout",
+    )
+
+    extracted = extract_text("teste.pdf", anonymized_stream.getvalue())
+    assert extracted.strip() == texto
+
+
+def test_anonymize_pdf_prioriza_termo_longo_sobreposto():
+    import pymupdf
+
+    texto = "CLAUSULA QUARTA - DO PRECO"
+    original_pdf = build_pdf(texto).getvalue()
+
+    anonymized_stream = anonymize_pdf_in_place(
+        original_pdf,
+        [{"text": "CLAUSULA"}, {"text": texto}],
+        redaction_mode="black_white_text",
+    )
+
+    result = pymupdf.open(stream=anonymized_stream.getvalue(), filetype="pdf")
+    assert result[0].get_text().count(texto) == 1
+
+
+def test_anonymize_pdf_usa_coordenadas_da_entidade_sem_buscar_todas_ocorrencias():
+    import pymupdf
+
+    texto = "Carlos assinou. Carlos compareceu."
+    source = pymupdf.open()
+    page = source.new_page()
+    page.insert_text((72, 72), texto)
+    first_carlos = next(word for word in page.get_text("words") if word[4] == "Carlos")
+
+    anonymized_stream = anonymize_pdf_in_place(
+        source.tobytes(),
+        [{
+            "text": "Carlos",
+            "rects": [tuple(first_carlos[:4])],
+            "page": 1,
+        }],
+        redaction_mode="blackout",
+    )
+
+    result = pymupdf.open(stream=anonymized_stream.getvalue(), filetype="pdf")
+    assert result[0].get_text().count("Carlos") == 1
 

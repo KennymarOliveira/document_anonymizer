@@ -1,4 +1,3 @@
-import re
 from typing import Any, Dict, List, Optional, Tuple
 import torch
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
@@ -135,9 +134,6 @@ class LegalNerEngine(BaseEngine):
                 + anonymized_text[ent["end"]:]
             )
 
-        clean_entities = [
-            {"text": e["text"], "label": e["label"], "engine": e["engine"]}
-            for e in reversed(entities_sorted)
-        ]
+        clean_entities = [dict(e) for e in reversed(entities_sorted)]
         return anonymized_text, clean_entities
 

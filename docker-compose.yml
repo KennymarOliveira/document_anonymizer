@@ -1,0 +1,52 @@
+services:
+  anonymizer-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PRELOAD_MODELS: "true"
+    image: document-anonymizer:latest
+    container_name: document_anonymizer
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - USE_GOOGLE_DRIVE_MOCK=${USE_GOOGLE_DRIVE_MOCK:-true}
+      - PORT=8000
+      - WORKERS=${WORKERS:-1}
+      # Caso utilize credenciais reais de Service Account do Google Drive:
+      # - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/service-account.json
+    volumes:
+      # Persistência de cache dos modelos
+      - hf_cache:/app/.cache/huggingface
+      # Montagem segura de credenciais externas (descomente caso utilize credenciais reais)
+      # - ./credentials:/app/credentials:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1.5G
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    networks:
+      - anonymizer-network
+
+networks:
+  anonymizer-network:
+    driver: bridge
+    # Para integrar com uma rede existente do um ecossistema maior, você pode declarar como externa:
+    # external: true
+    # name: microservices_shared_network
+
+volumes:
+  hf_cache:
+    name: document_anonymizer_hf_cache
+

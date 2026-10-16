@@ -57,8 +57,15 @@ def normalize_label(label: str) -> str:
 
 
 # Lista de engines suportadas no benchmark
-SUPPORTED_ENGINES = ["regex", "spacy", "embedding", "presidio", "hybrid"]
-SUPPORTED_ENGINES = ["regex", "spacy", "legal_ner", "embedding", "presidio", "hybrid"]
+SUPPORTED_ENGINES = [
+    "regex",
+    "spacy",
+    "legal_ner",
+    "embedding",
+    "presidio",
+    "hybrid",
+    "hybrid_legal",
+]
 
 # Threshold padrão de Intersection over Union (IoU) para matching de spans
 DEFAULT_IOU_THRESHOLD = 0.5

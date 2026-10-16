@@ -41,9 +41,6 @@ class SpacyNerEngine(BaseEngine):
                 final_end = final_start + len(ent_text)
 
                 entities.append({
-                    "start": ent.start_char,
-                    "end": ent.end_char,
-                    "text": ent.text,
                     "start": final_start,
                     "end": final_end,
                     "text": ent_text,
@@ -64,8 +61,5 @@ class SpacyNerEngine(BaseEngine):
                 + anonymized_text[ent["end"]:]
             )
 
-        clean_entities = [
-            {"text": e["text"], "label": e["label"], "engine": e["engine"]}
-            for e in reversed(entities_sorted)
-        ]
+        clean_entities = [dict(e) for e in reversed(entities_sorted)]
         return anonymized_text, clean_entities

@@ -24,4 +24,10 @@ class GoogleDocAnonymizeRequest(BaseModel):
             "'black_white_text' (tarja preta com texto branco)"
         ),
     )
+    include_report: bool = Field(
+        default=False,
+        description=(
+            "Para TXT, devolve um ZIP com arquivo anonimizado e relatório de detecções"
+        ),
+    )
 

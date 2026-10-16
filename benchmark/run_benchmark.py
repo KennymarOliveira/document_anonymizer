@@ -5,7 +5,6 @@ from datetime import datetime
 import json
 from pathlib import Path
 import sys
-from typing import List
 
 from benchmark.config import DEFAULT_IOU_THRESHOLD, SUPPORTED_ENGINES
 from benchmark.dataset import load_dataset

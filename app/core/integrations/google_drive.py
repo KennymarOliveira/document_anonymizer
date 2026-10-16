@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
 import io
-import logging
 import os
 from typing import Tuple
 
 import docx
 
-logger = logging.getLogger(__name__)
+from app.core.configuration.settings import settings
+from app.core.security.logger import get_logger
+
+logger = get_logger(__name__)
 
 GOOGLE_DOCS_MIMETYPE = "application/vnd.google-apps.document"
 DOCX_MIMETYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -141,8 +143,8 @@ def get_google_drive_client() -> GoogleDriveClientInterface:
     """Factory com fallback automático: se houver credenciais reais, usa o cliente real;
     caso contrário, usa o Mock.
     """
-    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    use_mock = os.getenv("USE_GOOGLE_DRIVE_MOCK", "true").lower() in ("true", "1", "yes")
+    creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+    use_mock = settings.USE_GOOGLE_DRIVE_MOCK
 
     if not use_mock and creds_path and os.path.exists(creds_path):
         logger.info("Utilizando GoogleDriveClient real com credenciais de Service Account.")

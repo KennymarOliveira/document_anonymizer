@@ -1,0 +1,65 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python / Ambientes Virtuais
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testes e Cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+conftest.py
+requirements-dev.txt
+
+# Benchmark e Relatórios
+benchmark/
+*.png
+*.jpg
+*.jpeg
+
+# Arquivos de IDE e Sistema Operacional
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Segredos, Chaves e Variáveis de Ambiente
+.env
+.env.*
+!.env.example
+*.json
+!pyproject.toml
+credentials/
+service-account*.json
+*.pem
+*.key
+
