@@ -2,7 +2,7 @@
 
 API REST para **extração e anonimização automática de dados sensíveis** em documentos jurídicos brasileiros (PDF, DOCX, DOC e TXT), com suporte a upload direto de arquivos e integração com **Google Drive**.
 
-A aplicação utiliza múltiplos motores de detecção — Regex, spaCy (NER), Embeddings semânticos, Microsoft Presidio e Legal NER (LeNER-BR) — que podem ser executados individualmente ou combinados em um **Motor Híbrido** para máxima cobertura.
+A aplicação utiliza múltiplos motores de detecção — Regex, spaCy (NER), Embeddings semânticos, Microsoft Presidio, Legal NER (LeNER-BR), Motor Híbrido e **Hybrid Legal** — que podem ser executados individualmente ou combinados para máxima cobertura.
 
 ---
 
@@ -18,6 +18,9 @@ A aplicação utiliza múltiplos motores de detecção — Regex, spaCy (NER), E
   - [Download dos Modelos de NLP](#download-dos-modelos-de-nlp)
 - [Configurações e Variáveis de Ambiente](#configurações-e-variáveis-de-ambiente)
 - [Como Executar](#como-executar)
+  - [Modo desenvolvimento (com hot-reload)](#modo-desenvolvimento-com-hot-reload)
+  - [Execução via Docker Compose (Microsserviço)](#execução-via-docker-compose-microsserviço)
+  - [Documentação interativa](#documentação-interativa)
 - [Como Usar a API](#como-usar-a-api)
   - [Health Check](#health-check)
   - [Anonimizar Documento via Upload (JSON)](#anonimizar-documento-via-upload-resposta-json)
@@ -30,6 +33,7 @@ A aplicação utiliza múltiplos motores de detecção — Regex, spaCy (NER), E
   - [4. PresidioEngine](#4-presidioengine)
   - [5. LegalNerEngine](#5-legalnerengine)
   - [6. HybridEngine (Padrão)](#6-hybridengine-padrão)
+  - [7. hybrid_legal](#7-hybrid_legal)
 - [Modos de Redação (Tarjas)](#modos-de-redação-tarjas)
 - [Como Funciona a Anonimização](#como-funciona-a-anonimização)
 - [Benchmark e Avaliação de Desempenho](#benchmark-e-avaliação-de-desempenho)
@@ -43,17 +47,17 @@ A aplicação utiliza múltiplos motores de detecção — Regex, spaCy (NER), E
 
 - **Extração de texto** de arquivos PDF, DOCX, DOC e TXT (com paginação e tratamento de acentuação).
 - **Integração com Google Drive**: busca documentos remotos por ID com suporte a fallback Mock e autenticação real via Service Account.
-- **Detecção de dados sensíveis** usando 6 motores diferentes (individuais ou combinados).
+- **Detecção de dados sensíveis** usando 7 motores diferentes (individuais ou combinados).
 - **Anonimização in-place**: os dados são removidos diretamente do documento original.
   - **PDF**: tarjas vetoriais desenhadas diretamente sobre as coordenadas exatas do texto (redação irreversível).
   - **DOCX/DOC**: substituição do texto sensível por blocos tarjados preservando estilos e formatação.
-  - **TXT**: substituição textual in-place.
+  - **TXT**: substituição textual in-place (blocos pretos ou identificadores únicos rastreáveis).
 - **Dois estilos de tarja (`redaction_mode`)**:
   - `blackout` (tarja preta sólida tradicional).
   - `black_white_text` (tarja preta com o texto da classificação em branco sobreposto, ex: `[CPF]`).
 - **16 categorias de dados** detectadas automaticamente por Regex especializado no padrão brasileiro.
 - **20 termos semânticos** monitorados pelo motor de Embeddings via similaridade vetorial.
-- **Resposta em JSON** (com texto anonimizado e lista de entidades) ou **download via streaming** do arquivo tarjado.
+- **Resposta em JSON**, **download via streaming** do arquivo tarjado ou **arquivo ZIP** (com documento anonimizado e relatório de detecções para TXT).
 - **Tratamento robusto de erros**: handlers de segurança centralizados que evitam vazamento de mensagens internas sensíveis.
 - **Módulo de Benchmark e Avaliação**: avaliação quantitativa com Matriz de Confusão, Precision, Recall, F1-Score e gráficos exportados.
 - **Documentação interativa** via Swagger UI (`/docs`) e ReDoc (`/redoc`).
@@ -118,6 +122,7 @@ app/core/builders/file_builder.py    app/schemas/anonymizer.py
 | Redação de PDF | [PyMuPDF (fitz)](https://pymupdf.readthedocs.io/) |
 | Leitura/Escrita DOCX | [python-docx](https://python-docx.readthedocs.io/) |
 | Validação de dados | [Pydantic v2](https://docs.pydantic.dev/) |
+| Conteinerização e Microsserviço | [Docker](https://www.docker.com/) e [Docker Compose](https://docs.docker.com/compose/) |
 | Gerenciador de pacotes | [Poetry](https://python-poetry.org/) |
 | Testes | [pytest](https://docs.pytest.org/) |
 
@@ -394,11 +399,13 @@ curl -X POST http://127.0.0.1:8000/api/v1/anonymize/google-doc \
     "file_id": "1A2B3C4D5E6F7G8H9I0J",
     "engine": "hybrid",
     "return_format": "json",
-    "redaction_mode": "blackout"
+    "redaction_mode": "blackout",
+    "include_report": false
   }'
 ```
 
 - Para receber o arquivo tarjado diretamente para download, informe `"return_format": "file"`.
+- Para arquivos TXT com `"return_format": "file"`, informe `"include_report": true` para receber um arquivo `.zip` com o documento anonimizado e o `relatorio_deteccoes.txt`.
 - Em ambiente de testes sem credenciais, arquivos com IDs de mock (ex: `doc-corporativo-123`) são resolvidos pelo `MockGoogleDriveClient`.
 
 ---
@@ -554,18 +561,18 @@ Os artefatos gerados incluem Matriz de Confusão (`confusion_matrix_{engine}.png
 
 ## Testes
 
-O projeto possui **111 testes automatizados** cobrindo todas as camadas da aplicação:
+O projeto possui **119 testes automatizados** cobrindo todas as camadas da aplicação:
 
 ```bash
 # Executar toda a suíte de testes
 poetry run pytest -v
 
 # Executar testes de um módulo específico
-poetry run pytest tests/test_engines.py -v         # Motores de detecção (33 testes)
-poetry run pytest tests/test_api.py -v             # Endpoints HTTP da API (21 testes)
-poetry run pytest tests/test_extractors.py -v      # Extratores de texto (16 testes)
+poetry run pytest tests/test_engines.py -v         # Motores de detecção (34 testes)
+poetry run pytest tests/test_api.py -v             # Endpoints HTTP da API (22 testes)
+poetry run pytest tests/test_extractors.py -v      # Extratores de texto (18 testes)
+poetry run pytest tests/test_builders.py -v        # Construtores de arquivo (15 testes)
 poetry run pytest tests/test_benchmark.py -v       # Módulo de benchmark (15 testes)
-poetry run pytest tests/test_builders.py -v        # Construtores de arquivo (11 testes)
 poetry run pytest tests/test_google_drive.py -v    # Integração Google Drive (8 testes)
 poetry run pytest tests/test_new_structure.py -v   # Configurações, Segurança e Rotas (7 testes)
 ```
@@ -574,14 +581,14 @@ poetry run pytest tests/test_new_structure.py -v   # Configurações, Segurança
 
 | Arquivo de Teste | Camada Coberta | Testes |
 |---|---|---|
-| `test_engines.py` | Padrões de Regex, SpacyNER, Presidio, Embedding e LegalNER | 33 |
-| `test_api.py` | Rotas de upload, retorno JSON e download de arquivo, validação e erros | 21 |
-| `test_extractors.py` | Extração página a página (PDF, DOCX, TXT) e tratamento de arquivos corrompidos | 16 |
+| `test_engines.py` | Padrões de Regex, SpacyNER, Presidio, Embedding e LegalNER | 34 |
+| `test_api.py` | Rotas de upload, retorno JSON, ZIP com relatórios, download e validações | 22 |
+| `test_extractors.py` | Extração página a página (PDF, DOCX, TXT) e tratamento de arquivos corrompidos | 18 |
+| `test_builders.py` | Reconstrução in-place com tarjas (PDF, DOCX, TXT), relatórios de teste e paginação | 15 |
 | `test_benchmark.py` | IoU, alinhamento de spans, métricas de classificação e visualização | 15 |
-| `test_builders.py` | Reconstrução in-place com tarjas (PDF, DOCX, TXT), paginação e estilos de tarja | 11 |
 | `test_google_drive.py` | Clientes Google Drive (Mock e Real), exportação e tratamento de erros 404/502 | 8 |
 | `test_new_structure.py` | Settings centrais, logger padronizado, models e handler global de exceções | 7 |
-| **Total** | **Cobertura completa de ponta a ponta** | **111** |
+| **Total** | **Cobertura completa de ponta a ponta** | **119** |
 
 ---
 
@@ -594,6 +601,11 @@ document_anonymizer/
 │   │   ├── builders/
 │   │   │   └── file_builder.py          # Montagem de documentos tarjados (PDF, DOCX, TXT)
 │   │   ├── configuration/
+│   │   │   ├── anonymizer/              # Interfaces e adapters de domínio/cache de configuração
+│   │   │   │   ├── adapters.py
+│   │   │   │   ├── contract.py
+│   │   │   │   ├── domain.py
+│   │   │   │   └── lifecycle.py
 │   │   │   ├── __init__.py
 │   │   │   ├── local_settings.py        # Configurações locais para desenvolvimento
 │   │   │   └── settings.py              # Centralização de configs e leitura de .env
@@ -632,6 +644,8 @@ document_anonymizer/
 │   ├── evaluator.py                     # Cálculo de métricas (Precision, Recall, F1)
 │   ├── run_benchmark.py                 # Script CLI de execução do benchmark
 │   └── visualizer.py                    # Geração de heatmaps e matrizes de confusão
+├── scripts/
+│   └── download_models.py               # Script para pré-carregamento dos modelos NLP no Docker
 ├── tests/
 │   ├── test_api.py                      # Testes dos endpoints HTTP da API
 │   ├── test_benchmark.py                # Testes do módulo de benchmark
@@ -641,9 +655,13 @@ document_anonymizer/
 │   ├── test_google_drive.py             # Testes da integração com Google Drive
 │   ├── test_new_structure.py            # Testes da nova arquitetura e handlers
 │   └── utils.py                         # Geradores de arquivos mock para testes
+├── .dockerignore                        # Filtro de arquivos para o build do container
 ├── .env                                 # Variáveis de ambiente locais
+├── .env.example                         # Exemplo de variáveis de ambiente para deploy
 ├── .gitignore
 ├── conftest.py
+├── Dockerfile                           # Multi-stage build seguro e otimizado da API
+├── docker-compose.yml                   # Orquestração do microsserviço com limites de recursos
 ├── poetry.lock
 ├── pyproject.toml
 ├── README.md
