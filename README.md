@@ -279,6 +279,24 @@ uvicorn routes:app --reload
 uvicorn routes:app --reload
 ```
 
+### Execução via Docker Compose (Microsserviço)
+
+Para executar o serviço conteinerizado com todas as dependências e modelos NLP pré-carregados:
+
+```bash
+# Construir a imagem e iniciar o container em background:
+docker compose up -d --build
+
+# Acompanhar os logs do microsserviço:
+docker compose logs -f
+
+# Verificar o status de integridade (Health Check):
+docker compose ps
+
+# Parar o serviço:
+docker compose down
+```
+
 A API estará disponível em `http://127.0.0.1:8000`.
 
 ### Documentação interativa
