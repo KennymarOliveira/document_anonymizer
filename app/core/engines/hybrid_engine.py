@@ -66,9 +66,6 @@ class HybridEngine(BaseEngine):
                 + anonymized_text[ent["end"]:]
             )
 
-        clean_entities = [
-            {"text": e["text"], "label": e["label"], "engine": e["engine"]}
-            for e in selected_entities
-        ]
+        clean_entities = [dict(e) for e in selected_entities]
 
         return anonymized_text, clean_entities

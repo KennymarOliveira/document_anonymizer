@@ -209,12 +209,37 @@ def anonymize_pdf_in_place(
 
     page_terms_map: Dict[int, set[str]] = defaultdict(set)
     global_terms: set[str] = set()
+    page_rects_map: Dict[
+        int, list[tuple[pymupdf.Rect, str, str, int]]
+    ] = defaultdict(list)
+    global_rects: list[tuple[pymupdf.Rect, str, str, int]] = []
 
     for e in entities:
         text = e.get("text", "").strip()
         if not text:
             continue
         page_num = e.get("page")
+        tier = int(e.get("tier", 50))
+        entity_rects = e.get("rects")
+        if entity_rects:
+            targets = (
+                page_rects_map[page_num]
+                if page_num is not None
+                else global_rects
+            )
+            render_segments = e.get("render_segments") or []
+            if render_segments:
+                for segment in render_segments:
+                    segment_rect = segment.get("rect")
+                    segment_text = str(segment.get("text") or text)
+                    if segment_rect:
+                        targets.append(
+                            (pymupdf.Rect(segment_rect), text, segment_text, tier)
+                        )
+            else:
+                for raw_rect in entity_rects:
+                    targets.append((pymupdf.Rect(raw_rect), text, text, tier))
+            continue
         if page_num is not None:
             page_terms_map[page_num].add(text)
         else:
@@ -256,10 +281,11 @@ def anonymize_pdf_in_place(
         page = pdf_doc[page_idx]
         page_num = page_idx + 1
         terms_for_page = page_terms_map.get(page_num, set()) | global_terms
-        if not terms_for_page:
+        positioned_candidates = page_rects_map.get(page_num, []) + global_rects
+        if not terms_for_page and not positioned_candidates:
             return
 
-        candidates: List[tuple[pymupdf.Rect, str]] = []
+        candidates: List[tuple[pymupdf.Rect, str, str, int]] = list(positioned_candidates)
 
         single_word_terms = {t for t in terms_for_page if " " not in t}
         multi_word_terms = sorted(
@@ -280,22 +306,22 @@ def anonymize_pdf_in_place(
 
                 if matched_term:
                     rect = pymupdf.Rect(w[:4])
-                    candidates.append((rect, matched_term))
+                    candidates.append((rect, matched_term, matched_term, 0))
 
         # A busca textual do PDF aceita correspondências parciais. Por isso,
         # termos de uma palavra que não foram encontrados como palavras inteiras
         # não podem usar search_for: "PR" não deve atingir "PRESTAÇÃO".
         for term in multi_word_terms:
             for rect in page.search_for(term):
-                candidates.append((rect, term))
+                candidates.append((rect, term, term, 0))
 
         # Prefere a expressão mais longa e evita anotações visuais sobrepostas.
-        candidates.sort(key=lambda item: -len(item[1]))
+        candidates.sort(key=lambda item: (-item[3], -len(item[1])))
         selected: List[tuple[pymupdf.Rect, str]] = []
-        for rect, term in candidates:
+        for rect, term, draw_text, _ in candidates:
             if any(rect.intersects(selected_rect) for selected_rect, _ in selected):
                 continue
-            selected.append((rect, term))
+            selected.append((rect, draw_text))
 
         for rect, _ in selected:
             page.add_redact_annot(rect, fill=(0, 0, 0))

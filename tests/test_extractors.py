@@ -4,7 +4,13 @@ import zipfile
 import pytest
 
 from tests.utils import build_docx, build_pdf
-from app.core.extractors.file_extractor import extract_text, extract_text_by_pages
+from app.core.extractors.file_extractor import (
+    extract_pages_with_layout,
+    extract_text,
+    extract_text_by_pages,
+    rects_for_text_span,
+    render_segments_for_text_span,
+)
 
 
 @pytest.fixture
@@ -100,6 +106,37 @@ def test_extract_text_by_pages_pdf():
     assert "Texto da Pagina 1" in pages[0][1]
     assert pages[1][0] == 2
     assert "Texto da Pagina 2" in pages[1][1]
+
+
+def test_extract_pages_with_layout_mapeia_span_de_pdf_para_retangulo():
+    texto = "O cliente Carlos Eduardo assinou o contrato."
+    content = build_pdf(texto).getvalue()
+
+    page = extract_pages_with_layout("doc.pdf", content)[0]
+    start = page.text.index("Carlos Eduardo")
+    rects = rects_for_text_span(page.char_rects, start, start + len("Carlos Eduardo"))
+
+    assert page.page_number == 1
+    assert rects
+    assert rects[0][2] > rects[0][0]
+    assert rects[0][3] > rects[0][1]
+
+
+def test_render_segments_separa_texto_quebrado_em_linhas():
+    texto = "Lucas Andrade\nRamos"
+    char_rects = [
+        (0, 0, 1, 1) if char != "\n" else None
+        for char in texto
+    ]
+    for index, char in enumerate(texto):
+        if char == "R":
+            char_rects[index] = (0, 2, 1, 3)
+        elif index > texto.index("R"):
+            char_rects[index] = (index, 2, index + 1, 3)
+
+    segments = render_segments_for_text_span(texto, char_rects, 0, len(texto))
+
+    assert [segment["text"] for segment in segments] == ["Lucas Andrade", "Ramos"]
 
 
 def test_extract_text_by_pages_unsupported_extension():

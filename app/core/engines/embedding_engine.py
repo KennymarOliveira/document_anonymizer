@@ -75,8 +75,5 @@ class EmbeddingEngine(BaseEngine):
                 + anonymized_text[ent["end"]:]
             )
 
-        clean_entities = [
-            {"text": e["text"], "label": e["label"], "engine": e["engine"]}
-            for e in reversed(entities_sorted)
-        ]
+        clean_entities = [dict(e) for e in reversed(entities_sorted)]
         return anonymized_text, clean_entities

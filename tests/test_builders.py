@@ -258,3 +258,26 @@ def test_anonymize_pdf_prioriza_termo_longo_sobreposto():
     result = pymupdf.open(stream=anonymized_stream.getvalue(), filetype="pdf")
     assert result[0].get_text().count(texto) == 1
 
+
+def test_anonymize_pdf_usa_coordenadas_da_entidade_sem_buscar_todas_ocorrencias():
+    import pymupdf
+
+    texto = "Carlos assinou. Carlos compareceu."
+    source = pymupdf.open()
+    page = source.new_page()
+    page.insert_text((72, 72), texto)
+    first_carlos = next(word for word in page.get_text("words") if word[4] == "Carlos")
+
+    anonymized_stream = anonymize_pdf_in_place(
+        source.tobytes(),
+        [{
+            "text": "Carlos",
+            "rects": [tuple(first_carlos[:4])],
+            "page": 1,
+        }],
+        redaction_mode="blackout",
+    )
+
+    result = pymupdf.open(stream=anonymized_stream.getvalue(), filetype="pdf")
+    assert result[0].get_text().count("Carlos") == 1
+
